@@ -48,7 +48,7 @@
   let settingsOpen = $state(false);
   // Every port the catalog knows for one system, with links to the projects.
   let knownFor = $state<string | null>(null);
-  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen || quitOpen;
+  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen || quitOpen || addPort !== null;
 
   // ROM folder: <root>/<system>/<game>/, created on first choice and synced on start and Rescan.
   type RomSummary = { ready: number; installed: number; assigned: number };
@@ -175,15 +175,52 @@
   const platformLabel = (port: Port) => (port.platforms ?? []).map((p) => ({ windows: "Windows", linux: "Linux", macos: "macOS" })[p] ?? p).join(" and ") + " only";
   /** Ports that ask for their game file themselves (PortShelf does not know where they keep it). */
   const selfManaged = (id: string) => isInstalled(id) && !library?.installed[id]?.rom;
-  async function locateInstall(port: Port) {
-    const picked = await open({ title: `Program of ${displayName(port)}` });
-    if (typeof picked !== "string") return;
+  // "Add port": pick a port's program; PortShelf guesses which catalog port it is from the
+  // file and folder names, and the user confirms, picks another, or describes a new one.
+  let addPort = $state<{ exec: string; choice: string; name: string; console: string } | null>(null);
+  const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+  function guessPort(exec: string): string {
+    if (!catalog) return "new";
+    const parts = exec.split("/");
+    const file = squash((parts.pop() ?? "").replace(/\.(appimage|exe|x86_64)$/i, ""));
+    const folder = squash(parts.pop() ?? "");
+    let best = { id: "new", score: 0 };
+    for (const port of catalog.ports) {
+      const words = [port.id, port.name, port.title ?? "", port.repo.split("/").filter(Boolean).pop() ?? "", ...port.id.split("-")]
+        .map(squash)
+        .filter((w) => w.length >= 3);
+      for (const hay of [file, folder]) {
+        if (!hay) continue;
+        for (const w of words) {
+          const score = hay.includes(w) ? w.length : w.includes(hay) && hay.length >= 4 ? hay.length : 0;
+          const bonus = isInstalled(port.id) ? 0 : 0.5;
+          if (score && score + bonus > best.score) best = { id: port.id, score: score + bonus };
+        }
+      }
+    }
+    return best.id;
+  }
+  async function startAddPort() {
+    if (panelOpen()) return;
+    const exec = await open({ title: "Choose the port's program" });
+    if (typeof exec !== "string") return;
+    const choice = guessPort(exec);
+    addPort = { exec, choice, name: "", console: system?.id ?? "n64" };
+  }
+  async function confirmAddPort() {
+    if (!addPort) return;
+    const { exec, choice, name, console: consoleId } = addPort;
     try {
-      library = await invoke("add_install", { id: port.id, exec: picked });
-      await refreshRom(port);
-      const at = systems[systemIndex]?.ports.findIndex((p) => p.id === port.id) ?? -1;
-      if (at >= 0) gameIndex = at;
-      flash(`${displayName(port)} added`);
+      const id = choice === "new" ? await invoke<string>("add_custom_port", { name, console: consoleId }) : choice;
+      library = await invoke("add_install", { id, exec });
+      catalog = await invoke<Catalog>("get_catalog");
+      addPort = null;
+      const port = catalog.ports.find((p) => p.id === id);
+      if (port) {
+        await refreshRom(port);
+        showOnShelf(port);
+        flash(`${displayName(port)} added`);
+      }
     } catch (e) {
       error = String(e);
     }
@@ -424,7 +461,8 @@
   let quitOpen = $state(false);
   let quitYes = $state(false);
   function back() {
-    if (knownFor) knownFor = null;
+    if (addPort) addPort = null;
+    else if (knownFor) knownFor = null;
     else if (settingsOpen) settingsOpen = false;
     else if (view === "games") view = "systems";
     else {
@@ -487,7 +525,7 @@
     if (e.target instanceof HTMLInputElement || editingName || searchOpen) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
-      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: romFolderAction, Tab: toggleAll,
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: romFolderAction, p: startAddPort, Tab: toggleAll,
       t: () => { const ids = Object.keys(themes); themeId = ids[(ids.indexOf(themeId) + 1) % ids.length]; flash(`Theme: ${themes[themeId].name}`); },
       m: () => (mode = mode === "dark" ? "light" : "dark"), k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
     };
@@ -528,6 +566,10 @@
       if (action === "b") knownFor = null;
       return;
     }
+    if (addPort) {
+      if (action === "b") addPort = null;
+      return;
+    }
     const actions: Record<string, () => void> = {
       left: () => move(-1), right: () => move(1), a: confirm, b: back, y: openSettings,
       select: toggleAll, start: openSearch, x: () => system && (knownFor = system.id),
@@ -543,7 +585,7 @@
   listen<string>("pad", (e) => onPad(e.payload));
 
   const prettyKey = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  const kindLabel = { recomp: "Static recompilation", decomp: "Decompilation", build: "Builds from your ROM" };
+  const kindLabel = { recomp: "Static recompilation", decomp: "Decompilation", build: "Builds from your ROM", custom: "Added by you" };
 
   // Mouse: drag the carousel sideways (or use the wheel) to browse. A drag of about one
   // item's width moves one step; a drag never counts as a click on the item under it.
@@ -599,6 +641,7 @@
 <main class:pad-mode={inputMode === "pad"} style="--system: {system?.info.color ?? 'var(--accent)'}">
   <header>
     <h1 class="brand"><img src="/icon.svg" alt="" width="34" height="34" draggable="false" />PortShelf</h1>
+    <button class="ghost" onclick={startAddPort}>Add port +</button>
     <label class="theme-picker">
       <span class="sr-only">Theme</span>
       <select bind:value={themeId} title={themes[themeId]?.description}>
@@ -700,9 +743,6 @@
           <button class="ghost" onclick={() => openUrl(game!.repo)}>Project page</button>
         </div>
         <div class="actions small">
-          {#if !isInstalled(game.id) && !installing[game.id]}
-            <button class="link" onclick={() => locateInstall(game!)}>I have it installed…</button>
-          {/if}
           <button class="link" onclick={() => pickCover(game!)}>Choose cover…</button>
           <button class="link" onclick={() => findCover(game!)}>Find cover online</button>
         </div>
@@ -758,6 +798,50 @@
           <span><kbd>Esc</kbd> Cancel</span>
         {/if}
       </p>
+    </div>
+  </div>
+{/if}
+
+{#if addPort && catalog}
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div class="scrim center" onclick={() => (addPort = null)}>
+    <div class="dialog add-port" role="dialog" aria-modal="true" aria-labelledby="add-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <h2 id="add-title">Add port</h2>
+      <p class="muted file">{addPort.exec}</p>
+      <label class="field">
+        <span>This is</span>
+        <select bind:value={addPort.choice}>
+          {#each Object.entries(catalog.consoles).sort((a, b) => a[1].year - b[1].year) as [cid, info]}
+            <optgroup label={info.name}>
+              {#each catalog.ports.filter((p) => p.console === cid) as port (port.id)}
+                <option value={port.id}>{displayName(port)}{isInstalled(port.id) ? " (installed)" : ""}</option>
+              {/each}
+            </optgroup>
+          {/each}
+          <option value="new">Something else (new port)</option>
+        </select>
+      </label>
+      {#if addPort.choice === "new"}
+        <label class="field">
+          <span>Name</span>
+          <!-- svelte-ignore a11y_autofocus -->
+          <input type="text" bind:value={addPort.name} placeholder="Game name" autofocus />
+        </label>
+        <label class="field">
+          <span>System</span>
+          <select bind:value={addPort.console}>
+            {#each Object.entries(catalog.consoles).sort((a, b) => a[1].year - b[1].year) as [cid, info]}
+              <option value={cid}>{info.name}</option>
+            {/each}
+          </select>
+        </label>
+      {:else if isInstalled(addPort.choice)}
+        <p class="warn-text">This port is already on the shelf; adding replaces the program it starts.</p>
+      {/if}
+      <div class="choices">
+        <button onclick={() => (addPort = null)}>Cancel</button>
+        <button class="on" onclick={confirmAddPort} disabled={addPort.choice === "new" && !addPort.name.trim()}>Add</button>
+      </div>
     </div>
   </div>
 {/if}
@@ -971,6 +1055,17 @@
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .rom.note { color: var(--muted) !important; }
   .primary:disabled { opacity: 0.55; cursor: default; }
+  .dialog.add-port { width: min(560px, 92vw); text-align: left; }
+  .dialog.add-port h2 { text-align: center; }
+  .dialog.add-port .file { font-size: 13px; word-break: break-all; margin: 0 0 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .field span { font-size: 14px; color: var(--muted); }
+  .field select, .field input {
+    font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px;
+  }
+  .warn-text { color: var(--warn); font-size: 14px; margin: 0 0 12px; }
+  .choices button:disabled { opacity: 0.5; cursor: default; }
   .romchip {
     background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid var(--accent); color: var(--text);
     border-radius: 999px; padding: 5px 14px; font-weight: 600;

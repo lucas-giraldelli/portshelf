@@ -1,5 +1,5 @@
 export type Media = "cartridge" | "disc";
-export type Kind = "recomp" | "decomp" | "build";
+export type Kind = "recomp" | "decomp" | "build" | "custom";
 
 export interface Console {
   name: string;

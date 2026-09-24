@@ -69,6 +69,9 @@ struct Library {
     /// Per-port choices the user made on the shelf, for installed and catalog-only ports alike.
     #[serde(default)]
     overrides: BTreeMap<String, Override>,
+    /// Ports added by the user that the catalog does not know (same shape as catalog entries).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    custom: Vec<Value>,
     /// Game files found for ports that are not installed yet.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pending_roms: BTreeMap<String, String>,
@@ -164,7 +167,7 @@ fn scan() -> Library {
             );
         }
     }
-    Library { roms_dir: String::new(), installed, overrides: BTreeMap::new(), pending_roms: BTreeMap::new() }
+    Library { roms_dir: String::new(), installed, overrides: BTreeMap::new(), custom: Vec::new(), pending_roms: BTreeMap::new() }
 }
 
 fn load_library() -> Result<Library, String> {
@@ -189,7 +192,16 @@ fn installed(id: &str) -> Result<Install, String> {
 
 #[tauri::command]
 fn get_catalog() -> Value {
-    serde_json::from_str(CATALOG).expect("catalog/ports.json is valid JSON")
+    full_catalog()
+}
+
+/// The bundled catalog plus the ports the user added themselves.
+fn full_catalog() -> Value {
+    let mut catalog: Value = serde_json::from_str(CATALOG).expect("catalog/ports.json is valid JSON");
+    if let (Ok(lib), Some(ports)) = (load_library(), catalog["ports"].as_array_mut()) {
+        ports.extend(lib.custom);
+    }
+    catalog
 }
 
 #[tauri::command]
@@ -418,7 +430,7 @@ struct CatalogInstall {
 }
 
 fn catalog_port(id: &str) -> Result<Value, String> {
-    let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
+    let catalog = full_catalog();
     catalog["ports"]
         .as_array()
         .and_then(|ports| ports.iter().find(|p| p["id"] == id))
@@ -562,6 +574,27 @@ async fn sync_roms() -> Result<RomSummary, String> {
         })
         .count();
     Ok(RomSummary { ready, installed: lib.installed.len(), assigned })
+}
+
+/// Registers a port that is not in the catalog, so it can be added like any other.
+/// Returns its id.
+#[tauri::command]
+fn add_custom_port(name: String, console: String) -> Result<String, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("give the port a name".into());
+    }
+    let slug: String = name.to_lowercase().chars().map(|c| if c.is_alphanumeric() { c } else { '-' }).collect();
+    let mut lib = load_library()?;
+    let mut id = format!("custom-{}", slug.trim_matches('-'));
+    while lib.custom.iter().any(|p| p["id"] == id.as_str()) {
+        id.push('2');
+    }
+    lib.custom.push(serde_json::json!({
+        "id": id, "name": name, "title": name, "console": console, "kind": "custom", "repo": ""
+    }));
+    save_library(&lib)?;
+    Ok(id)
 }
 
 /// Adds a port the user installed on their own, pointing at its program. Launch arguments,
@@ -789,7 +822,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, remember_rom, assign_rom, add_install])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, remember_rom, assign_rom, add_install, add_custom_port])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);

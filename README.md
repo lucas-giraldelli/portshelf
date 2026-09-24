@@ -19,7 +19,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - Settings editor for ports that store their options as JSON (the RecompFrontend family)
 - Cover art found automatically, with manual cover choice, renaming and online search per game
 - Four colour themes (Arcade, Console, Phosphor, Pop), each with a light and a dark mode, picked in the header
-- Ports the catalog cannot install on the current system can be added by pointing at their program ("I have it installed"); ports made for another operating system only are marked as such
+- Add port: pick the program of a port installed outside PortShelf; it guesses which catalog port it is from the file and folder names (for example `BM64Recompiled` is Bomberman 64), and anything else can be added as a new port with its own name and system. Ports made only for another operating system are marked as such
 - Search across every system
 - A list of every known port for a system, with links to each project
 - Cartridge and disc templates per system, with the cover shown whole inside the label area and per-game cartridge colours
@@ -35,6 +35,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Settings | S | North face button (Xbox Y, PlayStation Triangle) |
 | Known ports of the system | K | West face button (Xbox X, PlayStation Square) |
 | Rename | R | |
+| Add port | P | |
 | Next theme / light or dark mode | T / M | |
 | Open the ROM folder | I | |
 | Search every system | Ctrl+F | Start |
