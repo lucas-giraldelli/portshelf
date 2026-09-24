@@ -11,6 +11,7 @@ use std::process::{Command, Stdio};
 
 mod gamepad;
 mod install;
+mod romscan;
 mod scrape;
 
 const CATALOG: &str = include_str!("../../catalog/ports.json");
@@ -34,6 +35,9 @@ struct Install {
     /// Where the port expects its game data; the shelf only starts a port once this is set up.
     #[serde(default)]
     rom: Option<RomSpec>,
+    /// The port boots straight into the game when given its game file on the command line.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    game_file_arg: bool,
     /// Release tag, for ports installed by PortShelf.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     version: Option<String>,
@@ -65,6 +69,9 @@ struct Library {
     /// Per-port choices the user made on the shelf, for installed and catalog-only ports alike.
     #[serde(default)]
     overrides: BTreeMap<String, Override>,
+    /// Game files found for ports that are not installed yet.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pending_roms: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -144,11 +151,8 @@ fn scan() -> Library {
                     cwd: exec_path.parent().map(|p| p.to_string_lossy().into()),
                     config_dir: config_dir.map(|d| expand(d).to_string_lossy().into()),
                     cover: None,
-                    boot_setting: (*id == "tp").then(|| BootSetting {
-                        file: "config".into(),
-                        key: "backend.skipPreLaunchUI".into(),
-                        value: Value::Bool(true),
-                    }),
+                    boot_setting: None,
+                    game_file_arg: *id == "tp",
                     version: None,
                     rom: Some(match *id {
                         "tp" => RomSpec::ConfigKey { file: "config".into(), key: "backend.isoPath".into() },
@@ -160,7 +164,7 @@ fn scan() -> Library {
             );
         }
     }
-    Library { roms_dir: "/mnt/main/Roms/ports/roms".into(), installed, overrides: BTreeMap::new() }
+    Library { roms_dir: "/mnt/main/Roms/ports/roms".into(), installed, overrides: BTreeMap::new(), pending_roms: BTreeMap::new() }
 }
 
 fn load_library() -> Result<Library, String> {
@@ -217,7 +221,14 @@ fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
         set_config(id.clone(), boot.file.clone(), boot.key.clone(), boot.value.clone())?;
     }
     let mut cmd = Command::new(&install.exec);
-    cmd.args(&install.args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.args(&install.args);
+    if install.game_file_arg {
+        let status = rom_status(id.clone(), String::new())?;
+        if let Some(path) = status.path {
+            cmd.arg(path);
+        }
+    }
+    cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     if let Some(cwd) = &install.cwd {
         cmd.current_dir(cwd);
     }
@@ -373,6 +384,8 @@ struct CatalogInstall {
     config_in_install: bool,
     rom: Option<RomSpec>,
     boot_setting: Option<BootSetting>,
+    #[serde(default)]
+    game_file_arg: bool,
 }
 
 fn catalog_port(id: &str) -> Result<Value, String> {
@@ -394,6 +407,21 @@ struct InstallProgress {
     stage: &'static str,
     done: u64,
     total: Option<u64>,
+}
+
+/// Finds game files in a folder and says which ports each one fits.
+#[tauri::command]
+async fn scan_roms(dir: String) -> Result<Vec<romscan::Found>, String> {
+    let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || romscan::scan(Path::new(&dir), &catalog)).await.map_err(|e| e.to_string())
+}
+
+/// Game files picked for ports that are not installed yet; used when they get installed.
+#[tauri::command]
+fn remember_rom(id: String, path: String) -> Result<(), String> {
+    let mut lib = load_library()?;
+    lib.pending_roms.insert(id, path);
+    save_library(&lib)
 }
 
 /// The operating system, for knowing which catalog install rule applies.
@@ -441,7 +469,7 @@ async fn install_port(app: tauri::AppHandle, id: String) -> Result<Library, Stri
     };
     let mut lib = load_library()?;
     lib.installed.insert(
-        id,
+        id.clone(),
         Install {
             exec: exec.to_string_lossy().into_owned(),
             args: spec.args,
@@ -450,11 +478,17 @@ async fn install_port(app: tauri::AppHandle, id: String) -> Result<Library, Stri
             cover: None,
             boot_setting: spec.boot_setting,
             rom: spec.rom,
+            game_file_arg: spec.game_file_arg,
             version: Some(tag),
         },
     );
+    let pending = lib.pending_roms.remove(&id);
     save_library(&lib)?;
-    Ok(lib)
+    if let Some(path) = pending {
+        // Best effort: if the file moved, the port simply asks for it again.
+        let _ = select_rom(id, path);
+    }
+    load_library()
 }
 
 /// Hides the pointer while a controller is in use (the CSS cursor only updates on the next mouse move).
@@ -576,7 +610,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, scan_roms, remember_rom])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);
