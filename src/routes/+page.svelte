@@ -455,6 +455,10 @@
 {/if}
 
 <style>
+  /* A launcher, not a document: nothing is selectable except text fields. */
+  :global(*) { -webkit-user-select: none; user-select: none; }
+  :global(input, textarea) { -webkit-user-select: text; user-select: text; }
+  :global(img) { -webkit-user-drag: none; }
   :global(body) {
     margin: 0;
     background: #101014;
