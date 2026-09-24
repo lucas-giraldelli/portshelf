@@ -12,7 +12,9 @@ A shelf for the native PC ports of console games (N64: Recompiled ports, Harbour
 - Reads and edits the ports' own settings files (RecompFrontend JSON for now)
 - Catalog of known ports in `catalog/ports.json`; ports not installed can be shown with a link to their project
 
-The library (what is installed and how to start it) lives in `~/.config/portshelf/library.json` and is created by scanning the usual install locations on first run. Cover art goes in `~/.config/portshelf/covers/<port id>.png`.
+The library (what is installed and how to start it) lives in `~/.config/portshelf/library.json` and is created by scanning the usual install locations on first run.
+
+Covers are found automatically on [libretro-thumbnails](https://github.com/libretro-thumbnails) (matched by the No-Intro / Redump title in the catalog, preferring the USA release) and saved to `~/.config/portshelf/covers/<port id>.png`. From a game you can rename it (R), choose a cover file by hand (then scraping leaves it alone) or search again online; replaced covers are kept in `covers/replaced/`.
 
 ## Controls
 
@@ -22,6 +24,8 @@ The library (what is installed and how to start it) lives in `~/.config/portshel
 | Open system / play | Enter | A |
 | Back | Esc | B |
 | Settings | S | Y |
+| Rename | R | |
+| Every known port / installed only | Tab | Select |
 
 ## Development
 

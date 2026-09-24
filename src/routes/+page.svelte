@@ -25,6 +25,75 @@
   let configTab = $state("");
 
   const isInstalled = (id: string) => !!library?.installed[id];
+  const displayName = (port: Port) => library?.overrides?.[port.id]?.name ?? port.name;
+
+  async function loadCover(id: string) {
+    covers[id] = await invoke<string | null>("get_cover", { id });
+  }
+
+  // Fill in missing covers one at a time in the background (libretro-thumbnails).
+  async function scrapeMissing() {
+    if (!catalog) return;
+    for (const port of catalog.ports) {
+      if (covers[port.id]) continue;
+      try {
+        const found = await invoke<string | null>("scrape_cover", { id: port.id, console: port.console, title: port.title ?? port.name, force: false });
+        if (found) await loadCover(port.id);
+      } catch {
+        // No box art for this one; it keeps its drawn label.
+      }
+    }
+  }
+
+  async function findCover(port: Port, title = displayName(port)) {
+    try {
+      await invoke("unlock_cover", { id: port.id });
+      const found = await invoke<string | null>("scrape_cover", { id: port.id, console: port.console, title, force: true });
+      await loadCover(port.id);
+      flash(found ? `Cover: ${found.replace(/\.png$/, "")}` : "No cover found");
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function pickCover(port: Port) {
+    const picked = await open({ title: `Cover for ${displayName(port)}`, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+    if (typeof picked !== "string") return;
+    try {
+      await invoke("set_cover", { id: port.id, path: picked });
+      await loadCover(port.id);
+      library = await invoke("get_library");
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  // Renaming: the title in the caption becomes a text field.
+  let editingName = $state(false);
+  let nameDraft = $state("");
+  function startRename() {
+    if (!game) return;
+    nameDraft = displayName(game);
+    editingName = true;
+  }
+  async function saveName() {
+    if (!game) return;
+    const port = game;
+    editingName = false;
+    const custom = nameDraft.trim() === port.name ? null : nameDraft.trim();
+    try {
+      library = await invoke("rename", { id: port.id, name: custom });
+      // A new name is also a better search term, unless the cover was picked by hand.
+      if (custom && !library?.overrides?.[port.id]?.cover_locked) await findCover(port, custom);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  function flash(message: string) {
+    status = message;
+    setTimeout(() => (status = ""), 3000);
+  }
 
   // Whether each installed port has its game file set up; the shelf only starts ready ports.
   let roms = $state<Record<string, RomStatus>>({});
@@ -79,9 +148,8 @@
     try {
       catalog = await invoke<Catalog>("get_catalog");
       library = await invoke<Library>("get_library");
-      for (const port of catalog.ports) {
-        invoke<string | null>("get_cover", { id: port.id }).then((c) => (covers[port.id] = c));
-      }
+      await Promise.all(catalog.ports.map((port) => loadCover(port.id)));
+      scrapeMissing();
     } catch (e) {
       error = String(e);
     }
@@ -89,10 +157,11 @@
 
   function move(delta: number) {
     if (settingsOpen) return;
-    if (view === "systems") systemIndex = clamp(systemIndex + delta, systems.length);
+    if (view === "systems") systemIndex = wrap(systemIndex + delta, systems.length);
     else if (system) gameIndex = clamp(gameIndex + delta, system.ports.length);
   }
   const clamp = (i: number, n: number) => Math.max(0, Math.min(n - 1, i));
+  const wrap = (i: number, n: number) => (n ? ((i % n) + n) % n : 0);
 
   async function confirm() {
     if (settingsOpen) return;
@@ -151,10 +220,10 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.target instanceof HTMLInputElement) return;
+    if (e.target instanceof HTMLInputElement || editingName) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
-      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, Tab: toggleAll,
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, Tab: toggleAll, r: () => view === "games" && startRename(),
     };
     const action = actions[e.key];
     if (action) {
@@ -190,8 +259,10 @@
   const kindLabel = { recomp: "Static recompilation", decomp: "Decompilation", build: "Builds from your ROM" };
 
   // Position of item i relative to the focused one.
-  const slot = (i: number, focused: number, spacing: number) => {
-    const offset = i - focused;
+  const slot = (i: number, focused: number, spacing: number, loop = 0) => {
+    let offset = i - focused;
+    // On a looping carousel each item sits on whichever side of the focus is closer.
+    if (loop > 2) offset = wrap(offset + Math.floor(loop / 2), loop) - Math.floor(loop / 2);
     const distance = Math.abs(offset);
     return `transform: translate(calc(-50% + ${offset * spacing}px), -50%) scale(${Math.max(0.55, 1 - distance * 0.18)}); opacity: ${Math.max(0, 1 - distance * 0.28)}; z-index: ${100 - distance};`;
   };
@@ -220,7 +291,7 @@
    <div class="view" in:fade={{ duration: 220, delay: 120 }} out:scale={{ start: 1.6, opacity: 0, duration: 260, easing: cubicOut }}>
     <section class="carousel systems" aria-label="Systems">
       {#each systems as s, i (s.id)}
-        <button class="slot" class:focused={i === systemIndex} style={slot(i, systemIndex, 520)} onclick={() => (i === systemIndex ? confirm() : (systemIndex = i))}>
+        <button class="slot" class:focused={i === systemIndex} style={slot(i, systemIndex, 520, systems.length)} onclick={() => (i === systemIndex ? confirm() : (systemIndex = i))}>
           <ConsoleIcon id={s.id} size={460} />
         </button>
       {/each}
@@ -228,7 +299,7 @@
     {#if system}
       <div class="caption">
         <h2>{system.info.name}</h2>
-        <p>{system.installed} installed{showAll ? ` · ${system.ports.length} known` : ""}</p>
+        <p>{system.info.year} · {system.installed} installed{showAll ? ` · ${system.ports.length} known` : ""}</p>
       </div>
     {/if}
    </div>
@@ -239,9 +310,9 @@
         <button class="slot" class:focused={i === gameIndex} style={slot(i, gameIndex, 440)} onclick={() => (i === gameIndex ? confirm() : (gameIndex = i))}
           in:fly={{ y: 220, duration: 420, delay: 200 + Math.abs(i - gameIndex) * 70, easing: cubicOut }}>
           {#if system.info.media === "disc"}
-            <Disc name={port.name} cover={covers[port.id]} console={port.console} installed={isInstalled(port.id)} size={2.2} />
+            <Disc name={displayName(port)} cover={covers[port.id]} console={port.console} installed={isInstalled(port.id)} size={2.2} />
           {:else}
-            <Cartridge name={port.name} cover={covers[port.id]} console={port.console} shell={port.shell} installed={isInstalled(port.id)} size={2.2} />
+            <Cartridge name={displayName(port)} cover={covers[port.id]} console={port.console} shell={port.shell} installed={isInstalled(port.id)} size={2.2} />
           {/if}
         </button>
       {/each}
@@ -249,7 +320,18 @@
     {#if game}
       <div class="caption">
         <p class="system-name">{system.info.name}</p>
-        <h2>{game.name}</h2>
+        {#if editingName}
+          <!-- svelte-ignore a11y_autofocus -->
+          <input class="rename" bind:value={nameDraft} autofocus
+            onkeydown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") { e.stopPropagation(); editingName = false; } }}
+            onblur={saveName} aria-label="Game name" />
+        {:else}
+          <h2 class="title">
+            {displayName(game)}
+            <button class="icon" onclick={startRename} title="Rename (R)" aria-label="Rename">✎</button>
+          </h2>
+          {#if library?.overrides?.[game.id]?.name}<p class="original">{game.name}</p>{/if}
+        {/if}
         <p>{kindLabel[game.kind]}{isInstalled(game.id) ? "" : " · not installed"}</p>
         {#if isInstalled(game.id) && roms[game.id]}
           <p class="rom" class:missing={!romReady(game.id)}>
@@ -269,6 +351,10 @@
           {/if}
           <button class="ghost" onclick={() => openUrl(game!.repo)}>Project page</button>
         </div>
+        <div class="actions small">
+          <button class="link" onclick={() => pickCover(game!)}>Choose cover…</button>
+          <button class="link" onclick={() => findCover(game!)}>Find cover online</button>
+        </div>
         {#if status}<p class="status">{status}</p>{/if}
       </div>
     {/if}
@@ -281,6 +367,7 @@
     <span><kbd>←</kbd><kbd>→</kbd> Browse</span>
     <span><kbd>Enter</kbd> / <kbd>A</kbd> {view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : "Play"}</span>
     {#if view === "games"}<span><kbd>S</kbd> / <kbd>Y</kbd> Settings</span>{/if}
+    {#if view === "games"}<span><kbd>R</kbd> Rename</span>{/if}
     <span><kbd>Tab</kbd> / <kbd>Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
   </footer>
 </main>
@@ -365,6 +452,17 @@
   .system-name { text-transform: uppercase; letter-spacing: 2px; font-size: 12px; }
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
   .status { color: #9fd48b; }
+  .title { display: inline-flex; align-items: center; gap: 8px; }
+  .icon { background: none; border: 0; color: #8f877b; font-size: 18px; padding: 2px 4px; border-radius: 4px; }
+  .icon:hover, .icon:focus-visible { color: #f2b04c; }
+  .rename {
+    font: 600 26px/1.2 system-ui, sans-serif; text-align: center; color: inherit;
+    background: #17161b; border: 1px solid #f2b04c; border-radius: 6px; padding: 2px 10px; width: min(520px, 90%);
+  }
+  .original { font-size: 12px; }
+  .actions.small { margin-top: 6px; gap: 16px; }
+  .link { background: none; border: 0; color: #9b948a; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+  .link:hover, .link:focus-visible { color: #f2b04c; }
   .rom { font-size: 13px; color: #9fd48b !important; }
   .rom.missing { color: #f2b04c !important; }
 

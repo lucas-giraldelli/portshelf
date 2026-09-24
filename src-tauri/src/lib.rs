@@ -9,6 +9,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod scrape;
+
 const CATALOG: &str = include_str!("../../catalog/ports.json");
 
 /// How to start an installed port and where its config lives.
@@ -55,6 +57,43 @@ struct BootSetting {
 struct Library {
     roms_dir: String,
     installed: BTreeMap<String, Install>,
+    /// Per-port choices the user made on the shelf, for installed and catalog-only ports alike.
+    #[serde(default)]
+    overrides: BTreeMap<String, Override>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+struct Override {
+    /// Display name instead of the catalog's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    /// The cover was picked by hand: automatic scraping leaves it alone.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    cover_locked: bool,
+}
+
+fn cache_dir() -> PathBuf {
+    home().join(".cache/portshelf")
+}
+
+fn covers_dir() -> PathBuf {
+    app_dir().join("covers")
+}
+
+/// Existing cover files for a port (any extension).
+fn cover_files(id: &str) -> Vec<PathBuf> {
+    ["png", "jpg", "jpeg", "webp"].iter().map(|ext| covers_dir().join(format!("{id}.{ext}"))).filter(|p| p.exists()).collect()
+}
+
+/// Moves a port's current cover files aside (covers/replaced/) before a new one is written.
+fn retire_covers(id: &str) -> Result<(), String> {
+    let replaced = covers_dir().join("replaced");
+    for file in cover_files(id) {
+        fs::create_dir_all(&replaced).map_err(|e| e.to_string())?;
+        let name = file.file_name().unwrap_or_default();
+        fs::rename(&file, replaced.join(name)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn home() -> PathBuf {
@@ -115,7 +154,7 @@ fn scan() -> Library {
             );
         }
     }
-    Library { roms_dir: "/mnt/main/Roms/ports/roms".into(), installed }
+    Library { roms_dir: "/mnt/main/Roms/ports/roms".into(), installed, overrides: BTreeMap::new() }
 }
 
 fn load_library() -> Result<Library, String> {
@@ -240,6 +279,60 @@ fn set_config(id: String, file: String, key: String, value: Value) -> Result<(),
     fs::write(&path, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
+/// Sets or clears (None / empty) the display name of a port.
+#[tauri::command]
+fn rename(id: String, name: Option<String>) -> Result<Library, String> {
+    let mut lib = load_library()?;
+    let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+    lib.overrides.entry(id).or_default().name = name;
+    save_library(&lib)?;
+    Ok(lib)
+}
+
+/// Uses an image file the user picked as the cover and stops automatic scraping for it.
+#[tauri::command]
+fn set_cover(id: String, path: String) -> Result<(), String> {
+    let src = Path::new(&path);
+    let ext = src.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
+    if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp") {
+        return Err("pick a PNG, JPEG or WebP image".into());
+    }
+    retire_covers(&id)?;
+    fs::create_dir_all(covers_dir()).map_err(|e| e.to_string())?;
+    fs::copy(src, covers_dir().join(format!("{id}.{ext}"))).map_err(|e| format!("{path}: {e}"))?;
+    let mut lib = load_library()?;
+    lib.overrides.entry(id).or_default().cover_locked = true;
+    save_library(&lib)
+}
+
+/// Finds box art for `title` on libretro-thumbnails. Without `force` it only fills in
+/// missing covers; with `force` it replaces the current one unless the user picked it.
+#[tauri::command]
+async fn scrape_cover(id: String, console: String, title: String, force: bool) -> Result<Option<String>, String> {
+    let lib = load_library()?;
+    let locked = lib.overrides.get(&id).is_some_and(|o| o.cover_locked);
+    let has_cover = !cover_files(&id).is_empty();
+    if locked || (has_cover && !force) {
+        return Ok(None);
+    }
+    let tmp = cache_dir().join(format!("{id}.download.png"));
+    let file = tauri::async_runtime::spawn_blocking(move || scrape::fetch_cover(&console, &title, &cache_dir(), &tmp).map(|f| (f, tmp)))
+        .await
+        .map_err(|e| e.to_string())??;
+    retire_covers(&id)?;
+    fs::create_dir_all(covers_dir()).map_err(|e| e.to_string())?;
+    fs::rename(&file.1, covers_dir().join(format!("{id}.png"))).map_err(|e| e.to_string())?;
+    Ok(Some(file.0))
+}
+
+/// Forget a hand-picked cover so scraping can replace it again.
+#[tauri::command]
+fn unlock_cover(id: String) -> Result<(), String> {
+    let mut lib = load_library()?;
+    lib.overrides.entry(id).or_default().cover_locked = false;
+    save_library(&lib)
+}
+
 #[derive(Serialize)]
 struct RomStatus {
     /// True when the port has what it needs to boot.
@@ -343,7 +436,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

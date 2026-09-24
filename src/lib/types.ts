@@ -16,6 +16,8 @@ export interface Port {
   repo: string;
   config?: { format: string; dir?: string };
   game_arg?: string;
+  /** No-Intro / Redump title, used to find cover art. */
+  title?: string;
   /** Cartridge colour when it is not the console default (DK64 yellow, Zelda gold). */
   shell?: string;
 }
@@ -34,9 +36,15 @@ export interface Install {
   cover?: string;
 }
 
+export interface Override {
+  name?: string;
+  cover_locked?: boolean;
+}
+
 export interface Library {
   roms_dir: string;
   installed: Record<string, Install>;
+  overrides: Record<string, Override>;
 }
 
 export interface RomStatus {
