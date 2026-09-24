@@ -1,0 +1,314 @@
+<script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import Cartridge from "$lib/Cartridge.svelte";
+  import Disc from "$lib/Disc.svelte";
+  import ConsoleIcon from "$lib/ConsoleIcon.svelte";
+  import type { Catalog, Library, Port } from "$lib/types";
+
+  let catalog = $state<Catalog | null>(null);
+  let library = $state<Library | null>(null);
+  let covers = $state<Record<string, string | null>>({});
+  let showAll = $state(false);
+  let error = $state("");
+  let status = $state("");
+
+  // Two levels, like RetroArch: pick a system, then pick a game on it.
+  let view = $state<"systems" | "games">("systems");
+  let systemIndex = $state(0);
+  let gameIndex = $state(0);
+  let settingsOpen = $state(false);
+  let config = $state<Record<string, Record<string, unknown>> | null>(null);
+  let configTab = $state("");
+
+  const isInstalled = (id: string) => !!library?.installed[id];
+
+  let systems = $derived.by(() => {
+    if (!catalog) return [];
+    return Object.entries(catalog.consoles)
+      .map(([id, info]) => {
+        const ports = catalog!.ports
+          .filter((p) => p.console === id && (showAll || isInstalled(p.id)))
+          .sort((a, b) => Number(isInstalled(b.id)) - Number(isInstalled(a.id)) || a.name.localeCompare(b.name));
+        return { id, info, ports, installed: ports.filter((p) => isInstalled(p.id)).length };
+      })
+      .filter((s) => s.ports.length > 0)
+      .sort((a, b) => b.installed - a.installed);
+  });
+  let system = $derived(systems[systemIndex]);
+  let game = $derived(system?.ports[gameIndex]);
+
+  async function load() {
+    try {
+      catalog = await invoke<Catalog>("get_catalog");
+      library = await invoke<Library>("get_library");
+      for (const port of catalog.ports) {
+        invoke<string | null>("get_cover", { id: port.id }).then((c) => (covers[port.id] = c));
+      }
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  function move(delta: number) {
+    if (settingsOpen) return;
+    if (view === "systems") systemIndex = clamp(systemIndex + delta, systems.length);
+    else if (system) gameIndex = clamp(gameIndex + delta, system.ports.length);
+  }
+  const clamp = (i: number, n: number) => Math.max(0, Math.min(n - 1, i));
+
+  async function confirm() {
+    if (settingsOpen) return;
+    if (view === "systems") {
+      if (!system) return;
+      view = "games";
+      gameIndex = 0;
+    } else if (game) {
+      if (isInstalled(game.id)) await play(game);
+      else openUrl(game.repo);
+    }
+  }
+
+  function back() {
+    if (settingsOpen) settingsOpen = false;
+    else if (view === "games") view = "systems";
+  }
+
+  async function play(port: Port) {
+    try {
+      await invoke("launch", { id: port.id });
+      status = `${port.name} started`;
+      setTimeout(() => (status = ""), 3000);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function openSettings() {
+    if (view !== "games" || !game || !isInstalled(game.id)) return;
+    try {
+      config = await invoke("get_config", { id: game.id });
+      configTab = Object.keys(config ?? {})[0] ?? "";
+      settingsOpen = true;
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function setOption(file: string, key: string, value: unknown) {
+    if (!game || !config) return;
+    try {
+      await invoke("set_config", { id: game.id, file, key, value });
+      config[file][key] = value;
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (e.target instanceof HTMLInputElement) return;
+    const actions: Record<string, () => void> = {
+      ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings,
+    };
+    const action = actions[e.key];
+    if (action) {
+      e.preventDefault();
+      action();
+    }
+  }
+
+  // Gamepad: D-pad / left stick to move, A to confirm, B to go back, Y for settings.
+  let lastButtons: boolean[] = [];
+  let lastAxis = 0;
+  function pollGamepad() {
+    const pad = navigator.getGamepads?.().find((p) => p);
+    if (pad) {
+      const pressed = pad.buttons.map((b) => b.pressed);
+      const edge = (i: number) => pressed[i] && !lastButtons[i];
+      if (edge(0)) confirm();
+      if (edge(1)) back();
+      if (edge(3)) openSettings();
+      if (edge(14)) move(-1);
+      if (edge(15)) move(1);
+      const axis = Math.abs(pad.axes[0]) > 0.6 ? Math.sign(pad.axes[0]) : 0;
+      if (axis !== 0 && axis !== lastAxis) move(axis);
+      lastAxis = axis;
+      lastButtons = pressed;
+    }
+    requestAnimationFrame(pollGamepad);
+  }
+  requestAnimationFrame(pollGamepad);
+
+  const prettyKey = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const kindLabel = { recomp: "Static recompilation", decomp: "Decompilation", build: "Builds from your ROM" };
+
+  // Position of item i relative to the focused one.
+  const slot = (i: number, focused: number, spacing: number) => {
+    const offset = i - focused;
+    const distance = Math.abs(offset);
+    return `transform: translateX(calc(-50% + ${offset * spacing}px)) scale(${Math.max(0.55, 1 - distance * 0.18)}); opacity: ${Math.max(0, 1 - distance * 0.28)}; z-index: ${100 - distance};`;
+  };
+
+  load();
+</script>
+
+<svelte:window onkeydown={onKey} />
+
+<main style="--accent: {system?.info.color ?? '#f2b04c'}">
+  <header>
+    <h1>portshelf</h1>
+    <label class="toggle">
+      <input type="checkbox" bind:checked={showAll} onchange={() => { systemIndex = 0; gameIndex = 0; }} />
+      Show every known port
+    </label>
+    <button class="ghost" onclick={async () => (library = await invoke("rescan"))}>Rescan</button>
+  </header>
+
+  {#if error}
+    <p class="error" role="alert">{error} <button class="ghost" onclick={() => (error = "")}>dismiss</button></p>
+  {/if}
+
+  {#if view === "systems"}
+    <section class="carousel systems" aria-label="Systems">
+      {#each systems as s, i (s.id)}
+        <button class="slot" style={slot(i, systemIndex, 400)} onclick={() => (i === systemIndex ? confirm() : (systemIndex = i))}>
+          <ConsoleIcon id={s.id} size={340} />
+        </button>
+      {/each}
+    </section>
+    {#if system}
+      <div class="caption">
+        <h2>{system.info.name}</h2>
+        <p>{system.installed} installed{showAll ? ` · ${system.ports.length} known` : ""}</p>
+      </div>
+    {/if}
+  {:else if system}
+    <section class="carousel games" aria-label={system.info.name}>
+      {#each system.ports as port, i (port.id)}
+        <button class="slot" style={slot(i, gameIndex, 320)} onclick={() => (i === gameIndex ? confirm() : (gameIndex = i))}>
+          {#if system.info.media === "disc"}
+            <Disc name={port.name} cover={covers[port.id]} console={port.console} installed={isInstalled(port.id)} size={2.2} />
+          {:else}
+            <Cartridge name={port.name} cover={covers[port.id]} console={port.console} installed={isInstalled(port.id)} size={2.2} />
+          {/if}
+        </button>
+      {/each}
+    </section>
+    {#if game}
+      <div class="caption">
+        <p class="system-name">{system.info.name}</p>
+        <h2>{game.name}</h2>
+        <p>{kindLabel[game.kind]}{isInstalled(game.id) ? "" : " · not installed"}</p>
+        <div class="actions">
+          {#if isInstalled(game.id)}
+            <button class="primary" onclick={() => play(game!)}>Play</button>
+            <button class="ghost" onclick={openSettings}>Settings</button>
+          {:else}
+            <button class="primary" onclick={() => openUrl(game!.repo)}>Get it</button>
+          {/if}
+          <button class="ghost" onclick={() => openUrl(game!.repo)}>Project page</button>
+        </div>
+        {#if status}<p class="status">{status}</p>{/if}
+      </div>
+    {/if}
+  {/if}
+
+  <footer>
+    {#if view === "games"}<span><kbd>Esc</kbd> / <kbd>B</kbd> Systems</span>{/if}
+    <span><kbd>←</kbd><kbd>→</kbd> Browse</span>
+    <span><kbd>Enter</kbd> / <kbd>A</kbd> {view === "systems" ? "Open" : "Play"}</span>
+    {#if view === "games"}<span><kbd>S</kbd> / <kbd>Y</kbd> Settings</span>{/if}
+  </footer>
+</main>
+
+{#if settingsOpen && config && game}
+  <aside aria-label="{game.name} settings">
+    <button class="close ghost" onclick={() => (settingsOpen = false)} aria-label="Close">×</button>
+    <h2>{game.name}</h2>
+    {#if Object.keys(config).length}
+      <div class="tabs" role="tablist">
+        {#each Object.keys(config) as tab}
+          <button role="tab" aria-selected={configTab === tab} class:on={configTab === tab} onclick={() => (configTab = tab)}>{prettyKey(tab)}</button>
+        {/each}
+      </div>
+      <div class="options">
+        {#each Object.entries(config[configTab] ?? {}) as [key, value] (key)}
+          <label class="option">
+            <span>{prettyKey(key)}</span>
+            {#if typeof value === "boolean"}
+              <input type="checkbox" checked={value} onchange={(e) => setOption(configTab, key, e.currentTarget.checked)} />
+            {:else if typeof value === "number"}
+              <input type="number" value={value} onchange={(e) => setOption(configTab, key, Number(e.currentTarget.value))} />
+            {:else if typeof value === "string"}
+              <input type="text" value={value} onchange={(e) => setOption(configTab, key, e.currentTarget.value)} />
+            {:else}
+              <code>{JSON.stringify(value).slice(0, 40)}</code>
+            {/if}
+          </label>
+        {/each}
+      </div>
+    {:else}
+      <p class="muted">This port has no settings files yet. Start it once and they will show up here.</p>
+    {/if}
+  </aside>
+{/if}
+
+<style>
+  :global(body) {
+    margin: 0;
+    background: #101014;
+    color: #eee8df;
+    font: 15px/1.4 system-ui, sans-serif;
+    overflow: hidden;
+  }
+  main {
+    height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; padding: 16px 28px;
+    background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 65%), #101014;
+    transition: background 0.4s ease;
+  }
+  header { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  h1 { font-size: 22px; letter-spacing: 0.5px; margin: 4px 0; flex: 1; }
+  .toggle { display: flex; gap: 8px; align-items: center; color: #bdb4a7; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .ghost { background: none; border: 1px solid #4a4540; border-radius: 6px; padding: 5px 12px; }
+  .primary { background: #f2b04c; color: #1a1510; border: 0; border-radius: 8px; padding: 9px 28px; font-weight: 700; }
+  .error { background: #5c1e16; padding: 8px 12px; border-radius: 6px; }
+
+  .carousel { position: relative; flex: 1; min-height: 280px; }
+  .slot {
+    position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; margin-top: -150px;
+    background: none; border: 0; padding: 0;
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.28s ease;
+  }
+  .slot:focus-visible { outline: 2px solid #f2b04c; outline-offset: 8px; border-radius: 12px; }
+  .games .slot { margin-top: -170px; }
+
+  .caption { text-align: center; min-height: 170px; }
+  .caption h2 { margin: 0; font-size: 28px; }
+  .caption p { margin: 4px 0; color: #bdb4a7; }
+  .system-name { text-transform: uppercase; letter-spacing: 2px; font-size: 12px; }
+  .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .status { color: #9fd48b; }
+
+  footer { display: flex; gap: 22px; justify-content: center; color: #8f877b; font-size: 13px; padding: 8px 0 4px; flex-wrap: wrap; }
+  kbd { border: 1px solid #4a4540; border-radius: 4px; padding: 0 5px; font: 12px ui-monospace, monospace; color: #d6cec2; }
+
+  aside {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw);
+    background: #1b1a1f; border-left: 1px solid #333; padding: 24px; overflow-y: auto; box-sizing: border-box;
+    box-shadow: -12px 0 32px rgba(0,0,0,0.5);
+  }
+  .close { position: absolute; top: 12px; right: 12px; font-size: 18px; }
+  aside h2 { margin: 0 0 14px; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tabs button { background: #29282e; border: 0; border-radius: 6px; padding: 4px 10px; }
+  .tabs button.on { background: #f2b04c; color: #1a1510; }
+  .options { display: grid; gap: 6px; }
+  .option { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border-bottom: 1px solid #29282e; }
+  .option input[type="text"], .option input[type="number"] {
+    width: 150px; background: #101014; color: inherit; border: 1px solid #4a4540; border-radius: 4px; padding: 3px 6px;
+  }
+  code { font-size: 12px; color: #9b948a; }
+  .muted { color: #9b948a; }
+</style>
