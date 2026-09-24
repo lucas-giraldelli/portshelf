@@ -17,6 +17,10 @@ Photographs from Wikimedia Commons, resized and trimmed (the GameCube photo also
 
 CC BY-SA 3.0 images are shared under the same license: https://creativecommons.org/licenses/by-sa/3.0/
 
+## Cartridge and disc templates
+
+`static/media/*-cartridge.png` and `static/media/*-disc.png` are label templates found on image search (the N64 shell is a photograph); their label windows and disc holes are transparent so the cover art can sit behind them. Sources: pngfind.com (SNES), pngkey.com (PS2), and a disc template by stanrebro on DeviantArt (Xbox 360); the others came without attribution.
+
 ## Box art
 
 Box art is not bundled. The shelf reads covers from `~/.config/portshelf/covers/`; the ones used during development come from [libretro-thumbnails](https://github.com/libretro-thumbnails).

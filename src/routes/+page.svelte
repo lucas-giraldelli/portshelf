@@ -493,7 +493,6 @@
   /* Focused items come alive: consoles and cartridges bob, discs spin slowly. */
   .slot.focused > :global(*) { animation: bob 2.6s ease-in-out infinite; }
   .slot.focused :global(.disc) { animation: spin 9s linear infinite; }
-  .slot.focused :global(.cart) { box-shadow: 0 0 0 3px rgba(242, 176, 76, 0.55), 0 24px 32px rgba(0, 0, 0, 0.6); }
   @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
