@@ -7,10 +7,31 @@
   import Disc from "$lib/Disc.svelte";
   import ConsoleIcon from "$lib/ConsoleIcon.svelte";
   import PadGlyph from "$lib/PadGlyph.svelte";
+  import { applyTheme, themes, type Mode } from "$lib/themes";
   import { open } from "@tauri-apps/plugin-dialog";
   import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import type { Catalog, Library, Port, RomStatus } from "$lib/types";
+
+  // Theme and light / dark mode, remembered on this machine.
+  const stored = (key: string) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  let themeId = $state(stored("portshelf.theme") ?? "arcade");
+  let mode = $state<Mode>((stored("portshelf.mode") as Mode) ?? "dark");
+  $effect(() => {
+    applyTheme(themeId, mode);
+    try {
+      localStorage.setItem("portshelf.theme", themeId);
+      localStorage.setItem("portshelf.mode", mode);
+    } catch {
+      // not persisted; the theme still applies for this session
+    }
+  });
 
   let catalog = $state<Catalog | null>(null);
   let library = $state<Library | null>(null);
@@ -148,6 +169,24 @@
   let os = $state("linux");
   invoke<string>("platform").then((p) => (os = p));
   const canInstall = (port: Port) => !!port.install?.[os as "linux" | "windows" | "macos"];
+  /** Not made for this operating system (for example, Windows only). */
+  const unavailable = (port: Port) => !!port.platforms && !port.platforms.includes(os);
+  const platformLabel = (port: Port) => (port.platforms ?? []).map((p) => ({ windows: "Windows", linux: "Linux", macos: "macOS" })[p] ?? p).join(" and ") + " only";
+  /** Ports that ask for their game file themselves (PortShelf does not know where they keep it). */
+  const selfManaged = (id: string) => isInstalled(id) && !library?.installed[id]?.rom;
+  async function locateInstall(port: Port) {
+    const picked = await open({ title: `Program of ${displayName(port)}` });
+    if (typeof picked !== "string") return;
+    try {
+      library = await invoke("add_install", { id: port.id, exec: picked });
+      await refreshRom(port);
+      const at = systems[systemIndex]?.ports.findIndex((p) => p.id === port.id) ?? -1;
+      if (at >= 0) gameIndex = at;
+      flash(`${displayName(port)} added`);
+    } catch (e) {
+      error = String(e);
+    }
+  }
   let installing = $state<Record<string, { stage: string; done: number; total: number | null }>>({});
   listen<{ id: string; stage: string; done: number; total: number | null }>("install-progress", (e) => {
     installing[e.payload.id] = e.payload;
@@ -328,7 +367,12 @@
   });
   let system = $derived(systems[systemIndex]);
   let game = $derived(system?.ports[gameIndex]);
-  let primaryLabel = $derived(view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : game && !isInstalled(game.id) ? (canInstall(game) ? "Install" : "Get it") : "Play");
+  let primaryLabel = $derived(
+    view === "systems" ? "Open"
+    : !game ? ""
+    : isInstalled(game.id) ? (romReady(game.id) ? (selfManaged(game.id) ? "Start" : "Play") : "Select game file")
+    : unavailable(game) ? "Project page"
+    : canInstall(game) ? "Install" : "Get it");
 
   async function load() {
     try {
@@ -359,7 +403,8 @@
       gameIndex = 0;
     } else if (game) {
       if (!isInstalled(game.id)) {
-        if (canInstall(game)) await installPort(game);
+        if (unavailable(game)) openUrl(game.repo);
+        else if (canInstall(game)) await installPort(game);
         else openUrl(game.repo);
       }
       else if (romReady(game.id)) await play(game);
@@ -441,7 +486,9 @@
     if (e.target instanceof HTMLInputElement || editingName || searchOpen) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
-      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: romFolderAction, Tab: toggleAll, k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: romFolderAction, Tab: toggleAll,
+      t: () => { const ids = Object.keys(themes); themeId = ids[(ids.indexOf(themeId) + 1) % ids.length]; flash(`Theme: ${themes[themeId].name}`); },
+      m: () => (mode = mode === "dark" ? "light" : "dark"), k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
     };
     const action = actions[e.key];
     if (action) {
@@ -548,9 +595,20 @@
 
 <svelte:window onkeydown={onKey} onmousedown={() => (inputMode = "keys")} onmousemove={(e) => { if (e.movementX || e.movementY) inputMode = "keys"; }} />
 
-<main class:pad-mode={inputMode === "pad"} style="--accent: {system?.info.color ?? '#f2b04c'}">
+<main class:pad-mode={inputMode === "pad"} style="--system: {system?.info.color ?? 'var(--accent)'}">
   <header>
     <h1 class="brand"><img src="/icon.svg" alt="" width="34" height="34" draggable="false" />PortShelf</h1>
+    <label class="theme-picker">
+      <span class="sr-only">Theme</span>
+      <select bind:value={themeId} title={themes[themeId]?.description}>
+        {#each Object.entries(themes) as [id, theme]}
+          <option value={id}>{theme.name}</option>
+        {/each}
+      </select>
+    </label>
+    <button class="ghost mode" onclick={() => (mode = mode === "dark" ? "light" : "dark")} title="Switch to {mode === 'dark' ? 'light' : 'dark'} mode" aria-label="Switch to {mode === 'dark' ? 'light' : 'dark'} mode">
+      {mode === "dark" ? "☀" : "☾"}
+    </button>
     {#if library?.roms_dir}
       <button class="romchip" onclick={romFolderAction} title="Open {library.roms_dir}/{system?.id ?? ''}">
         {system ? `${system.info.name} ROMs` : "ROMs"}{#if syncing} · syncing…{:else if systemRoms?.installed} · {systemRoms.ready} of {systemRoms.installed} ready{/if}
@@ -616,12 +674,14 @@
           {#if library?.overrides?.[game.id]?.name}<p class="original">{game.name}</p>{/if}
         {/if}
         <p>{kindLabel[game.kind]}{#if authorsOf(game)} · by {authorsOf(game)}{/if}{isInstalled(game.id) ? "" : " · not installed"}</p>
-        {#if isInstalled(game.id) && roms[game.id] && !romReady(game.id)}
+        {#if selfManaged(game.id)}
+          <p class="rom note">Asks for the game file when it starts</p>
+        {:else if isInstalled(game.id) && roms[game.id] && !romReady(game.id)}
           <p class="rom missing">Missing game file</p>
         {/if}
         <div class="actions">
           {#if isInstalled(game.id) && romReady(game.id)}
-            <button class="primary" onclick={() => play(game!)}>Play</button>
+            <button class="primary" onclick={() => play(game!)}>{selfManaged(game.id) ? "Start" : "Play"}</button>
             <button class="ghost" onclick={() => selectRom(game!)}>Change game file</button>
             <button class="ghost" onclick={openSettings}>Settings</button>
           {:else if isInstalled(game.id)}
@@ -629,6 +689,8 @@
             <button class="ghost" onclick={openSettings}>Settings</button>
           {:else if installing[game.id]}
             <button class="primary progress" disabled style="--p:{installing[game.id].total ? (installing[game.id].done / installing[game.id].total!) * 100 : 0}%">{installLabel(game.id)}</button>
+          {:else if unavailable(game)}
+            <button class="primary" disabled>{platformLabel(game)}</button>
           {:else if canInstall(game)}
             <button class="primary" onclick={() => installPort(game!)}>Install</button>
           {:else}
@@ -637,6 +699,9 @@
           <button class="ghost" onclick={() => openUrl(game!.repo)}>Project page</button>
         </div>
         <div class="actions small">
+          {#if !isInstalled(game.id) && !installing[game.id]}
+            <button class="link" onclick={() => locateInstall(game!)}>I have it installed…</button>
+          {/if}
           <button class="link" onclick={() => pickCover(game!)}>Choose cover…</button>
           <button class="link" onclick={() => findCover(game!)}>Find cover online</button>
         </div>
@@ -790,19 +855,26 @@
     font-weight: 300 800;
     font-display: block;
   }
+  @font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("/fonts/atkinson-next.woff2") format("woff2");
+    font-weight: 200 800;
+    font-display: block;
+  }
   :global(body) {
     margin: 0;
-    background: #101014;
-    color: #eee8df;
-    font: 15px/1.4 "Outfit", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.45 "Atkinson Hyperlegible Next", system-ui, sans-serif;
     overflow: hidden;
   }
   main {
     height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; padding: 16px 28px;
-    background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 65%), #101014;
+    background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--system) 30%, transparent), transparent 65%), var(--bg);
     transition: background 0.4s ease;
   }
   header { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  h1, h2, .brand, .caption h2, .dialog h2 { font-family: "Outfit", system-ui, sans-serif; }
   h1 { font-size: 22px; letter-spacing: 0.5px; margin: 4px 0; flex: 1; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
   .brand img { display: block; }
@@ -810,13 +882,13 @@
   .carousel:active { cursor: grabbing; }
   button { font: inherit; color: inherit; cursor: pointer; }
   :global(input) { font-family: inherit; }
-  .ghost { background: none; border: 1px solid #4a4540; border-radius: 6px; padding: 5px 12px; }
+  .ghost { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; }
   .primary.progress {
-    color: #1a1510; opacity: 1; cursor: progress;
-    background: linear-gradient(90deg, #f2b04c var(--p), #7d6440 var(--p));
+    color: var(--on-accent); opacity: 1; cursor: progress;
+    background: linear-gradient(90deg, var(--accent) var(--p), color-mix(in srgb, var(--accent) 45%, var(--surface)) var(--p));
   }
-  .primary { background: #f2b04c; color: #1a1510; border: 0; border-radius: 8px; padding: 9px 28px; font-weight: 700; }
-  .error { background: #5c1e16; padding: 8px 12px; border-radius: 6px; }
+  .primary { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 8px; padding: 9px 28px; font-weight: 700; }
+  .error { background: var(--danger); padding: 8px 12px; border-radius: 6px; }
 
   /* Both views sit on top of each other so the enter and leave transitions overlap. */
   .stage { position: relative; flex: 1; }
@@ -828,7 +900,7 @@
     background: none; border: 0; padding: 0;
     transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.28s ease;
   }
-  .slot:focus-visible { outline: 2px solid #f2b04c; outline-offset: 8px; border-radius: 12px; }
+  .slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 8px; border-radius: 12px; }
 
   /* Focused items lift smoothly (a transition, so leaving focus never snaps back), and discs
      spin only while focused: pausing keeps their angle instead of jumping back to 0. */
@@ -843,93 +915,101 @@
 
   .caption { text-align: center; min-height: 170px; }
   .caption h2 { margin: 0; font-size: 28px; }
-  .caption p { margin: 4px 0; color: #bdb4a7; }
-  .system-name { text-transform: uppercase; letter-spacing: 2px; font-size: 12px; }
+  .caption p { margin: 4px 0; color: var(--muted); font-size: 17px; }
+  .system-name { text-transform: uppercase; letter-spacing: 2px; font-size: 13px; }
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
-  .status { color: #9fd48b; }
+  .status { color: var(--ok); }
   .title { display: inline-flex; align-items: center; gap: 8px; }
-  .icon { background: none; border: 0; color: #8f877b; font-size: 18px; padding: 2px 4px; border-radius: 4px; }
-  .icon:hover, .icon:focus-visible { color: #f2b04c; }
+  .icon { background: none; border: 0; color: var(--muted); font-size: 18px; padding: 2px 4px; border-radius: 4px; }
+  .icon:hover, .icon:focus-visible { color: var(--accent); }
   .rename {
-    font: 600 26px/1.2 "Outfit", system-ui, sans-serif; text-align: center; color: inherit;
-    background: #17161b; border: 1px solid #f2b04c; border-radius: 6px; padding: 2px 10px; width: min(520px, 90%);
+    font: 600 26px/1.2 "Atkinson Hyperlegible Next", system-ui, sans-serif; text-align: center; color: inherit;
+    background: var(--surface); border: 1px solid var(--accent); border-radius: 6px; padding: 2px 10px; width: min(520px, 90%);
   }
-  .original { font-size: 12px; }
+  .original { font-size: 14px; }
   .actions.small { margin-top: 6px; gap: 16px; }
-  .link { background: none; border: 0; color: #9b948a; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
-  .link:hover, .link:focus-visible { color: #f2b04c; }
-  .rom { font-size: 13px; color: #9fd48b !important; }
-  .rom.missing { color: #f2b04c !important; }
+  .link { background: none; border: 0; color: var(--muted); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
+  .link:hover, .link:focus-visible { color: var(--accent); }
+  .rom { font-size: 15px; color: var(--ok) !important; }
+  .rom.missing { color: var(--accent) !important; }
 
-  footer { display: flex; gap: 22px; justify-content: center; color: #8f877b; font-size: 13px; padding: 8px 0 4px; flex-wrap: wrap; }
+  footer { display: flex; gap: 26px; justify-content: center; color: var(--muted); font-size: 15px; padding: 10px 0 6px; flex-wrap: wrap; }
   footer span { display: inline-flex; align-items: center; gap: 4px; }
   kbd.pad { border-radius: 10px; min-width: 22px; font-weight: 700; }
   /* Using the controller: no mouse pointer until the mouse moves again. */
   :global(body:has(main.pad-mode)), :global(body:has(main.pad-mode) *) { cursor: none !important; }
   kbd {
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
-    border: 1px solid #4a4540; border-radius: 4px; font: 12px/1 "Outfit", system-ui, sans-serif; color: #d6cec2;
+    min-width: 24px; height: 24px; padding: 0 6px; box-sizing: border-box; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 5px; font: 600 13px/1 "Atkinson Hyperlegible Next", system-ui, sans-serif; color: var(--text);
   }
 
   aside {
     position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw);
-    background: #1b1a1f; border-left: 1px solid #333; padding: 24px; overflow-y: auto; box-sizing: border-box;
+    background: var(--panel); border-left: 1px solid var(--border); padding: 24px; overflow-y: auto; box-sizing: border-box;
     box-shadow: -12px 0 32px rgba(0,0,0,0.5);
   }
   .close { position: absolute; top: 12px; right: 12px; font-size: 18px; }
   aside h2 { margin: 0 0 14px; }
   .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-  .tabs button { background: #29282e; border: 0; border-radius: 6px; padding: 4px 10px; }
-  .tabs button.on { background: #f2b04c; color: #1a1510; }
+  .tabs button { background: var(--surface); border: 0; border-radius: 6px; padding: 4px 10px; }
+  .tabs button.on { background: var(--accent); color: var(--on-accent); }
   .options { display: grid; gap: 6px; }
-  .option { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border-bottom: 1px solid #29282e; }
+  .option { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--surface); }
   .option input[type="text"], .option input[type="number"] {
-    width: 150px; background: #101014; color: inherit; border: 1px solid #4a4540; border-radius: 4px; padding: 3px 6px;
+    width: 150px; background: var(--bg); color: inherit; border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px;
   }
-  code { font-size: 12px; color: #9b948a; }
-  .muted { color: #9b948a; }
+  code { font-size: 13px; color: var(--muted); }
+  .muted { color: var(--muted); }
+  .theme-picker select {
+    font: inherit; font-size: 14px; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
+  }
+  .mode { font-size: 16px; line-height: 1; padding: 5px 10px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .rom.note { color: var(--muted) !important; }
+  .primary:disabled { opacity: 0.55; cursor: default; }
   .romchip {
-    background: rgba(242, 176, 76, 0.12); border: 1px solid #f2b04c; color: #f7d9a6;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid var(--accent); color: var(--text);
     border-radius: 999px; padding: 5px 14px; font-weight: 600;
     transition: background 0.15s ease;
   }
-  .romchip:hover, .romchip:focus-visible { background: rgba(242, 176, 76, 0.25); }
+  .romchip:hover, .romchip:focus-visible { background: color-mix(in srgb, var(--accent) 28%, transparent); }
   .scrim.center { place-items: center; padding-top: 0; }
   .dialog {
-    width: min(380px, 90vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px;
+    width: min(380px, 90vw); background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     box-shadow: 0 24px 60px rgba(0,0,0,0.6); padding: 22px 22px 14px; text-align: center;
   }
   .dialog h2 { margin: 0 0 18px; font-size: 20px; }
   .choices { display: flex; gap: 12px; justify-content: center; }
   .choices button {
-    min-width: 110px; padding: 9px 0; border-radius: 8px; border: 1px solid #4a4540;
-    background: #2c2a33; font-weight: 600;
+    min-width: 110px; padding: 9px 0; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); font-weight: 600;
   }
-  .choices button.on { background: #f2b04c; border-color: #f2b04c; color: #1a1510; }
-  .dialog-hints { display: flex; gap: 16px; justify-content: center; margin: 16px 0 0; font-size: 12px; color: #8f877b; }
+  .choices button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .dialog-hints { display: flex; gap: 16px; justify-content: center; margin: 16px 0 0; font-size: 14px; color: var(--muted); }
   .dialog-hints span { display: inline-flex; align-items: center; gap: 4px; }
-  .scrim { position: fixed; inset: 0; background: rgba(8, 8, 10, 0.6); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }
-  .search { width: min(640px, 92vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,0.6); overflow: hidden; }
-  .query { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #333; background: transparent; color: inherit; font: 18px "Outfit", system-ui, sans-serif; padding: 16px 18px; outline: none; }
+  .scrim { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }
+  .search { width: min(640px, 92vw); background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,0.6); overflow: hidden; }
+  .query { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: inherit; font: 18px "Atkinson Hyperlegible Next", system-ui, sans-serif; padding: 16px 18px; outline: none; }
   .results { list-style: none; margin: 0; padding: 6px; max-height: 56vh; overflow-y: auto; }
   .results button { width: 100%; display: flex; gap: 12px; align-items: center; background: none; border: 0; border-radius: 8px; padding: 6px 8px; text-align: left; }
-  .results button.on { background: #2c2a33; }
-  .results .thumb { width: 56px; height: 40px; flex: none; border-radius: 4px; overflow: hidden; background: #2d2c33; }
+  .results button.on { background: var(--surface-2); }
+  .results .thumb { width: 56px; height: 40px; flex: none; border-radius: 4px; overflow: hidden; background: var(--surface); }
   .results .thumb img { width: 100%; height: 100%; object-fit: cover; }
   .results .name { display: block; font-weight: 600; }
-  .results .meta { display: block; font-size: 12px; color: #9b948a; }
-  .results .installed { color: #9fd48b; }
-  .results .none { padding: 14px; color: #9b948a; }
-  .link.inline { font-size: inherit; padding: 0; color: #d6cec2; }
+  .results .meta { display: block; font-size: 14px; color: var(--muted); }
+  .results .installed { color: var(--ok); }
+  .results .none { padding: 14px; color: var(--muted); }
+  .link.inline { font-size: inherit; padding: 0; color: var(--text); }
   .known { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
-  .known li { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 8px; background: #222127; }
-  .thumb { width: 64px; height: 46px; flex: none; padding: 0; border: 0; border-radius: 4px; overflow: hidden; background: #2d2c33; }
+  .known li { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 8px; background: var(--surface); }
+  .thumb { width: 64px; height: 46px; flex: none; padding: 0; border: 0; border-radius: 4px; overflow: hidden; background: var(--surface); }
   .thumb img { width: 100%; height: 100%; object-fit: cover; }
   .info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
   .info .name { background: none; border: 0; padding: 0; font-weight: 600; text-align: left; }
-  .info .name:hover, .info .name:focus-visible { color: #f2b04c; }
-  .info .meta { font-size: 12px; color: #9b948a; }
-  .info .installed { color: #9fd48b; }
-  .info .link { padding: 0; font-size: 12px; }
+  .info .name:hover, .info .name:focus-visible { color: var(--accent); }
+  .info .meta { font-size: 14px; color: var(--muted); }
+  .info .installed { color: var(--ok); }
+  .info .link { padding: 0; font-size: 14px; }
 </style>

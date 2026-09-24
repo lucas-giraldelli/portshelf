@@ -18,6 +18,8 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - ROM folder: chosen once, it gets a folder per game (`<system>/<game>/`, for example `n64/chameleon_twist/`). A file placed in a game's folder is used for that game; files anywhere else in the ROM folder are identified by the game code stored in them (N64 cartridge header; GameCube disc header, also inside RVZ and WIA images) or by their No-Intro or Redump name, and copies that look modified are skipped, since ports need the original game. The header shows how many installed ports of the system in view have their game file; it opens a file chooser in that system's folder, and the picked file goes to the game whose folder it is in (or the one its game code identifies). PortShelf picks up new ports and game files on start and whenever its window comes back into focus; files for ports not installed yet are set up when the port is installed
 - Settings editor for ports that store their options as JSON (the RecompFrontend family)
 - Cover art found automatically, with manual cover choice, renaming and online search per game
+- Four colour themes (Arcade, Console, Phosphor, Pop), each with a light and a dark mode, picked in the header
+- Ports the catalog cannot install on the current system can be added by pointing at their program ("I have it installed"); ports made for another operating system only are marked as such
 - Search across every system
 - A list of every known port for a system, with links to each project
 - Cartridge and disc templates per system, with the cover shown whole inside the label area and per-game cartridge colours
@@ -33,6 +35,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Settings | S | North face button (Xbox Y, PlayStation Triangle) |
 | Known ports of the system | K | West face button (Xbox X, PlayStation Square) |
 | Rename | R | |
+| Next theme / light or dark mode | T / M | |
 | Open the ROM folder | I | |
 | Search every system | Ctrl+F | Start |
 | Every known port or installed only | Tab | Select |

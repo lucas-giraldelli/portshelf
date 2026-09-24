@@ -17,5 +17,5 @@
 </svg>
 
 <style>
-  .glyph { display: inline-block; vertical-align: middle; color: #eee8df; }
+  .glyph { display: inline-block; vertical-align: middle; color: var(--text); }
 </style>

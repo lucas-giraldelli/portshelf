@@ -12,7 +12,8 @@ fn main() {
     let port = catalog["ports"].as_array().unwrap().iter().find(|p| p["id"] == id.as_str()).expect("unknown id");
     let rule: install::Rule = serde_json::from_value(port["install"]["linux"].clone()).expect("no linux rule");
     let work = dest.with_extension("work");
-    match install::install(port["repo"].as_str().unwrap(), &rule, &dest.join(id), &work, |p| {
+    let repo = port["install"]["repo"].as_str().or(port["repo"].as_str()).unwrap();
+    match install::install(repo, &rule, &dest.join(id), &work, |p| {
         if let install::Progress::Downloading { done, total } = p {
             eprint!("\r{} / {:?} bytes", done, total);
         }

@@ -32,22 +32,22 @@
     { "id": "sssv",       "name": "Space Station Silicon Valley", "title": "SpaceStation Silicon Valley", "console": "n64", "kind": "recomp", "repo": "https://github.com/Cellenseres/SSSV_Recomp", "config": { "format": "recompfrontend" }, "install": {"linux": {"asset": ["linux.tar.gz"]}} },
     { "id": "dnzh",       "name": "Duke Nukem: Zero Hour", "title": "Duke Nukem - Zero Hour",    "console": "n64", "kind": "recomp", "repo": "https://github.com/sonicdcer/DNZHRecomp", "config": { "format": "recompfrontend" } },
     { "id": "ctwist",     "name": "Chameleon Twist", "title": "Chameleon Twist",          "console": "n64", "kind": "recomp", "repo": "https://github.com/Rainchus/ChameleonTwist1-JP-Recomp", "config": { "format": "recompfrontend" } },
-    { "id": "drmario64",  "name": "Dr. Mario 64", "title": "Dr. Mario 64",             "console": "n64", "kind": "recomp", "repo": "https://github.com/theboy181/drmario64_recomp_plus", "config": { "format": "recompfrontend" } },
+    { "id": "drmario64", "platforms": ["windows"],  "name": "Dr. Mario 64", "title": "Dr. Mario 64",             "console": "n64", "kind": "recomp", "repo": "https://github.com/theboy181/drmario64_recomp_plus", "config": { "format": "recompfrontend" } },
 
     { "id": "tp",         "name": "Zelda: Twilight Princess (Dusklight)", "codes": ["GZ2E", "GZ2P", "GZ2J"], "authors": "Twilit Realm", "title": "Legend of Zelda, The - Twilight Princess", "console": "gc", "kind": "decomp", "repo": "https://github.com/TwilitRealm/dusk", "install": {"linux": {"asset": ["linux-x86_64.appimage"]}, "config_dir": "~/.local/share/TwilitRealm/Dusklight", "rom": {"kind": "config_key", "file": "config", "key": "backend.isoPath"}, "game_file_arg": true} },
     { "id": "acgc",       "name": "Animal Crossing", "codes": ["GAFE"], "title": "Animal Crossing",          "console": "gc", "kind": "decomp", "repo": "https://github.com/flyngmt/ACGC-PC-Port" },
 
-    { "id": "zelda3",     "name": "Zelda: A Link to the Past", "title": "Legend of Zelda, The - A Link to the Past", "console": "snes", "kind": "build", "repo": "https://github.com/RadzPrower/Zelda-3-Launcher" },
-    { "id": "smetroid",   "name": "Super Metroid", "title": "Super Metroid",            "console": "snes", "kind": "build", "repo": "https://github.com/RadzPrower/Super-Metroid-Launcher" },
+    { "id": "zelda3", "platforms": ["windows"],     "name": "Zelda: A Link to the Past", "title": "Legend of Zelda, The - A Link to the Past", "console": "snes", "kind": "build", "repo": "https://github.com/RadzPrower/Zelda-3-Launcher" },
+    { "id": "smetroid", "platforms": ["windows"],   "name": "Super Metroid", "title": "Super Metroid",            "console": "snes", "kind": "build", "repo": "https://github.com/RadzPrower/Super-Metroid-Launcher" },
     { "id": "smw",        "name": "Super Mario World", "title": "Super Mario World",        "console": "snes", "kind": "build", "repo": "https://github.com/qurious-pixel/SMAS_Launcher", "install": {"linux": {"asset": ["linux.zip"]}} },
 
-    { "id": "tmc",        "name": "Zelda: The Minish Cap", "title": "Legend of Zelda, The - The Minish Cap",    "console": "gba", "kind": "build", "repo": "https://github.com/StonedModder/auto-tmc" },
+    { "id": "tmc", "platforms": ["windows"],        "name": "Zelda: The Minish Cap", "title": "Legend of Zelda, The - The Minish Cap",    "console": "gba", "kind": "build", "repo": "https://github.com/StonedModder/auto-tmc" },
 
     { "id": "wipeout",    "name": "WipEout (Phantom Edition)", "title": "Wipeout", "console": "ps1", "kind": "decomp", "repo": "https://github.com/wipeout-phantom-edition/wipeout-phantom-edition" },
     { "id": "driver2",    "name": "Driver 2 (REDRIVER2)", "title": "Driver 2",     "console": "ps1", "kind": "decomp", "repo": "https://github.com/OpenDriver2/REDRIVER2", "install": {"linux": {"asset": ["linux_release.tar.gz"]}} },
     { "id": "lod",        "name": "The Legend of Dragoon", "title": "Legend of Dragoon, The",    "console": "ps1", "kind": "decomp", "repo": "https://github.com/Legend-of-Dragoon-Modding/Legend-of-Dragoon-Java", "install": {"linux": {"asset": ["severed_chains_linux.tar.gz"]}} },
 
-    { "id": "jak",        "name": "Jak and Daxter (OpenGOAL)", "title": "Jak and Daxter - The Precursor Legacy", "console": "ps2", "kind": "decomp", "repo": "https://github.com/open-goal/jak-project", "install": {"linux": {"asset": ["opengoal-linux", ".tar.gz"]}} },
+    { "id": "jak",        "name": "Jak and Daxter (OpenGOAL)", "title": "Jak and Daxter - The Precursor Legacy", "console": "ps2", "kind": "decomp", "repo": "https://github.com/open-goal/jak-project", "install": {"repo": "https://github.com/open-goal/launcher", "linux": {"asset": ["_amd64.appimage"]}} },
 
     { "id": "sonic3air",  "name": "Sonic 3 A.I.R.", "title": "Sonic The Hedgehog 3",           "console": "md", "kind": "decomp", "repo": "https://github.com/Eukaryot/sonic3air", "install": {"linux": {"asset": ["sonic3air_game.tar.gz"]}} },
 

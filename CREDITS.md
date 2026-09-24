@@ -21,9 +21,12 @@ CC BY-SA 3.0 images are shared under the same license: https://creativecommons.o
 
 `static/media/*-cartridge.png` and `static/media/*-disc.png` are label templates found on image search (the N64 shell is a photograph); their label windows and disc holes are transparent so the cover art can sit behind them. Sources: pngfind.com (SNES), pngkey.com (PS2), and a disc template by stanrebro on DeviantArt (Xbox 360); the others came without attribution.
 
-## Font
+## Fonts
 
-[Outfit](https://fonts.google.com/specimen/Outfit) by Rodrigo Fuenzalida, SIL Open Font License 1.1 (`static/fonts/outfit.woff2`, Latin subset from Google Fonts).
+Both under the SIL Open Font License 1.1, Latin subsets from Google Fonts:
+
+- [Outfit](https://fonts.google.com/specimen/Outfit) by Rodrigo Fuenzalida, for headings (`static/fonts/outfit.woff2`)
+- [Atkinson Hyperlegible Next](https://fonts.google.com/specimen/Atkinson+Hyperlegible+Next) by the Braille Institute, for text (`static/fonts/atkinson-next.woff2`)
 
 ## Box art
 

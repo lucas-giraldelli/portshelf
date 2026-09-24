@@ -399,6 +399,9 @@ fn quit(app: tauri::AppHandle) {
 /// Catalog install section of a port.
 #[derive(Deserialize, Default)]
 struct CatalogInstall {
+    /// Where the releases come from, when not the project's own repository
+    /// (OpenGOAL: the launcher, not the compiler tools).
+    repo: Option<String>,
     linux: Option<install::Rule>,
     windows: Option<install::Rule>,
     macos: Option<install::Rule>,
@@ -561,6 +564,45 @@ async fn sync_roms() -> Result<RomSummary, String> {
     Ok(RomSummary { ready, installed: lib.installed.len(), assigned })
 }
 
+/// Adds a port the user installed on their own, pointing at its program. Launch arguments,
+/// settings folder and game file handling come from the catalog when it knows the port.
+#[tauri::command]
+fn add_install(id: String, exec: String) -> Result<Library, String> {
+    let port = catalog_port(&id)?;
+    let spec: CatalogInstall = serde_json::from_value(port["install"].clone()).unwrap_or_default();
+    let exec_path = PathBuf::from(&exec);
+    if !exec_path.is_file() {
+        return Err(format!("{exec} is not a file"));
+    }
+    let cwd = exec_path.parent().unwrap_or(Path::new("/")).to_path_buf();
+    let config_dir = if spec.config_in_install {
+        Some(cwd.to_string_lossy().into_owned())
+    } else {
+        spec.config_dir.as_deref().map(|d| expand(d).to_string_lossy().into_owned())
+    };
+    let mut lib = load_library()?;
+    lib.installed.insert(
+        id.clone(),
+        Install {
+            exec,
+            args: spec.args,
+            cwd: Some(cwd.to_string_lossy().into_owned()),
+            config_dir,
+            cover: None,
+            boot_setting: spec.boot_setting,
+            rom: spec.rom,
+            game_file_arg: spec.game_file_arg,
+            version: None,
+        },
+    );
+    let pending = lib.pending_roms.remove(&id);
+    save_library(&lib)?;
+    if let Some(path) = pending {
+        let _ = select_rom(id, path);
+    }
+    load_library()
+}
+
 /// The operating system, for knowing which catalog install rule applies.
 #[tauri::command]
 fn platform() -> &'static str {
@@ -580,7 +622,7 @@ async fn install_port(app: tauri::AppHandle, id: String) -> Result<Library, Stri
         _ => None,
     }
     .ok_or("PortShelf does not know how to install this port on this system yet")?;
-    let repo = port["repo"].as_str().unwrap_or_default().to_string();
+    let repo = spec.repo.clone().unwrap_or_else(|| port["repo"].as_str().unwrap_or_default().to_string());
     let dest = ports_dir().join(&id);
     let work = cache_dir().join(format!("install-{id}"));
     let (tag, exec) = {
@@ -747,7 +789,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, remember_rom, assign_rom])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, remember_rom, assign_rom, add_install])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);

@@ -18,6 +18,8 @@ export interface Port {
   game_arg?: string;
   /** No-Intro / Redump title, used to find cover art. */
   title?: string;
+  /** Operating systems the port exists for, when not all of them. */
+  platforms?: string[];
   /** Who made the port; defaults to the GitHub owner. */
   authors?: string;
   /** How PortShelf installs it, per operating system. */
@@ -38,6 +40,9 @@ export interface Install {
   cwd?: string;
   config_dir?: string;
   cover?: string;
+  /** How the port gets its game file; absent when the port asks for it itself. */
+  rom?: { kind: string } | null;
+  version?: string;
 }
 
 export interface Override {

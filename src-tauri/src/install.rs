@@ -45,13 +45,20 @@ pub fn install(repo_url: &str, rule: &Rule, dest: &Path, work: &Path, mut progre
         .map_err(|e| e.to_string())?;
     let tag = release["tag_name"].as_str().unwrap_or("latest").to_string();
     let wanted: Vec<String> = rule.asset.iter().map(|w| w.to_lowercase()).collect();
+    // Signatures and checksums sit next to the real files with the same words in their
+    // names; skip them, and prefer the shortest name among the rest (the AppImage itself
+    // over "AppImage.tar.gz").
     let asset = release["assets"]
         .as_array()
         .and_then(|assets| {
-            assets.iter().find(|a| {
-                let name = a["name"].as_str().unwrap_or_default().to_lowercase();
-                wanted.iter().all(|w| name.contains(w.as_str()))
-            })
+            assets
+                .iter()
+                .filter(|a| {
+                    let name = a["name"].as_str().unwrap_or_default().to_lowercase();
+                    let side_file = [".sig", ".asc", ".sha256", ".sha512", ".md5", ".json", ".txt"].iter().any(|e| name.ends_with(e));
+                    !side_file && wanted.iter().all(|w| name.contains(w.as_str()))
+                })
+                .min_by_key(|a| a["name"].as_str().unwrap_or_default().len())
         })
         .ok_or_else(|| format!("no download for this system in {repo} {tag}"))?;
     let name = asset["name"].as_str().unwrap_or("download").to_string();
