@@ -40,5 +40,5 @@
     background: radial-gradient(circle, #1a1a1a 0 22%, #e6e8ec 23% 60%, rgba(200,205,215,0.9) 61%);
     box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
   }
-  .missing { filter: grayscale(1) brightness(0.55); }
+  .missing { filter: saturate(0.4) brightness(0.8); }
 </style>

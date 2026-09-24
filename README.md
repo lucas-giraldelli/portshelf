@@ -29,7 +29,7 @@ Needs Rust, Node and pnpm, plus WebKitGTK 4.1 on Linux.
 
 ```bash
 pnpm install
-WEBKIT_DISABLE_DMABUF_RENDERER=1 pnpm tauri dev   # the variable avoids a Wayland protocol error with NVIDIA
+pnpm app   # tauri dev, also rebuilding when catalog/ changes; sets WEBKIT_DISABLE_DMABUF_RENDERER=1 (Wayland + NVIDIA)
 ```
 
 On Linux the window has no title bar (tiling compositors do not draw one, so GTK would add its own buttons); Windows and macOS keep their native one.

@@ -16,6 +16,8 @@ export interface Port {
   repo: string;
   config?: { format: string; dir?: string };
   game_arg?: string;
+  /** Cartridge colour when it is not the console default (DK64 yellow, Zelda gold). */
+  shell?: string;
 }
 
 export interface Catalog {

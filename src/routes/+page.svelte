@@ -5,7 +5,7 @@
   import Disc from "$lib/Disc.svelte";
   import ConsoleIcon from "$lib/ConsoleIcon.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
-  import { fade, scale } from "svelte/transition";
+  import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import type { Catalog, Library, Port, RomStatus } from "$lib/types";
 
@@ -107,6 +107,13 @@
     }
   }
 
+  function toggleAll() {
+    if (settingsOpen) return;
+    showAll = !showAll;
+    systemIndex = clamp(systemIndex, systems.length);
+    gameIndex = 0;
+  }
+
   function back() {
     if (settingsOpen) settingsOpen = false;
     else if (view === "games") view = "systems";
@@ -147,7 +154,7 @@
     if (e.target instanceof HTMLInputElement) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
-      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings,
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, Tab: toggleAll,
     };
     const action = actions[e.key];
     if (action) {
@@ -167,6 +174,7 @@
       if (edge(0)) confirm();
       if (edge(1)) back();
       if (edge(3)) openSettings();
+      if (edge(8)) toggleAll();
       if (edge(14)) move(-1);
       if (edge(15)) move(1);
       const axis = Math.abs(pad.axes[0]) > 0.6 ? Math.sign(pad.axes[0]) : 0;
@@ -207,8 +215,10 @@
     <p class="error" role="alert">{error} <button class="ghost" onclick={() => (error = "")}>dismiss</button></p>
   {/if}
 
+  <div class="stage">
   {#if view === "systems"}
-    <section class="carousel systems" aria-label="Systems" in:scale={{ start: 1.25, duration: 320, easing: cubicOut }} out:fade={{ duration: 120 }}>
+   <div class="view" in:fade={{ duration: 220, delay: 120 }} out:scale={{ start: 1.6, opacity: 0, duration: 260, easing: cubicOut }}>
+    <section class="carousel systems" aria-label="Systems">
       {#each systems as s, i (s.id)}
         <button class="slot" class:focused={i === systemIndex} style={slot(i, systemIndex, 520)} onclick={() => (i === systemIndex ? confirm() : (systemIndex = i))}>
           <ConsoleIcon id={s.id} size={460} />
@@ -221,14 +231,17 @@
         <p>{system.installed} installed{showAll ? ` · ${system.ports.length} known` : ""}</p>
       </div>
     {/if}
+   </div>
   {:else if system}
-    <section class="carousel games" aria-label={system.info.name} in:scale={{ start: 0.7, duration: 360, easing: cubicOut }} out:fade={{ duration: 120 }}>
+   <div class="view" out:fade={{ duration: 160 }}>
+    <section class="carousel games" aria-label={system.info.name}>
       {#each system.ports as port, i (port.id)}
-        <button class="slot" class:focused={i === gameIndex} style={slot(i, gameIndex, 320)} onclick={() => (i === gameIndex ? confirm() : (gameIndex = i))}>
+        <button class="slot" class:focused={i === gameIndex} style={slot(i, gameIndex, 440)} onclick={() => (i === gameIndex ? confirm() : (gameIndex = i))}
+          in:fly={{ y: 220, duration: 420, delay: 200 + Math.abs(i - gameIndex) * 70, easing: cubicOut }}>
           {#if system.info.media === "disc"}
             <Disc name={port.name} cover={covers[port.id]} console={port.console} installed={isInstalled(port.id)} size={2.2} />
           {:else}
-            <Cartridge name={port.name} cover={covers[port.id]} console={port.console} installed={isInstalled(port.id)} size={2.2} />
+            <Cartridge name={port.name} cover={covers[port.id]} console={port.console} shell={port.shell} installed={isInstalled(port.id)} size={2.2} />
           {/if}
         </button>
       {/each}
@@ -259,13 +272,16 @@
         {#if status}<p class="status">{status}</p>{/if}
       </div>
     {/if}
+   </div>
   {/if}
+  </div>
 
   <footer>
     {#if view === "games"}<span><kbd>Esc</kbd> / <kbd>B</kbd> Systems</span>{/if}
     <span><kbd>←</kbd><kbd>→</kbd> Browse</span>
     <span><kbd>Enter</kbd> / <kbd>A</kbd> {view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : "Play"}</span>
     {#if view === "games"}<span><kbd>S</kbd> / <kbd>Y</kbd> Settings</span>{/if}
+    <span><kbd>Tab</kbd> / <kbd>Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
   </footer>
 </main>
 
@@ -322,6 +338,9 @@
   .primary { background: #f2b04c; color: #1a1510; border: 0; border-radius: 8px; padding: 9px 28px; font-weight: 700; }
   .error { background: #5c1e16; padding: 8px 12px; border-radius: 6px; }
 
+  /* Both views sit on top of each other so the enter and leave transitions overlap. */
+  .stage { position: relative; flex: 1; }
+  .view { position: absolute; inset: 0; display: flex; flex-direction: column; }
   .carousel { position: relative; flex: 1; min-height: 280px; }
   .slot {
     position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%;
@@ -350,7 +369,12 @@
   .rom.missing { color: #f2b04c !important; }
 
   footer { display: flex; gap: 22px; justify-content: center; color: #8f877b; font-size: 13px; padding: 8px 0 4px; flex-wrap: wrap; }
-  kbd { border: 1px solid #4a4540; border-radius: 4px; padding: 0 5px; font: 12px ui-monospace, monospace; color: #d6cec2; }
+  footer span { display: inline-flex; align-items: center; gap: 4px; }
+  kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
+    border: 1px solid #4a4540; border-radius: 4px; font: 12px/1 system-ui, sans-serif; color: #d6cec2;
+  }
 
   aside {
     position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw);

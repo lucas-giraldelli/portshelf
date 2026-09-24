@@ -11,11 +11,11 @@
     "x360": { "name": "Xbox 360",     "media": "disc",      "color": "#3a8a2a", "year": 2005 }
   },
   "ports": [
-    { "id": "dk64",       "name": "Donkey Kong 64",           "console": "n64", "kind": "recomp", "repo": "https://github.com/Rainchus/Donkey-Kong-64-Recompiled", "config": { "format": "recompfrontend", "dir": "~/.config/DK64Recompiled" }, "game_arg": "dk64" },
+    { "id": "dk64",       "name": "Donkey Kong 64",           "console": "n64", "shell": "#f4c60f", "kind": "recomp", "repo": "https://github.com/Rainchus/Donkey-Kong-64-Recompiled", "config": { "format": "recompfrontend", "dir": "~/.config/DK64Recompiled" }, "game_arg": "dk64" },
     { "id": "mt64",       "name": "Mario Tennis",             "console": "n64", "kind": "recomp", "repo": "https://github.com/lucas-giraldelli/mariotennis64recomp", "config": { "format": "recompfrontend", "dir": "~/.config/MT64Recompiled" }, "game_arg": "mt64" },
     { "id": "mm",         "name": "Zelda: Majora's Mask",     "console": "n64", "kind": "recomp", "repo": "https://github.com/Zelda64Recomp/Zelda64Recomp", "config": { "format": "recompfrontend", "dir": "~/.config/Zelda64Recompiled" } },
-    { "id": "mm-2s2h",    "name": "Zelda: Majora's Mask (2 Ship 2 Harkinian)", "console": "n64", "kind": "decomp", "repo": "https://github.com/HarbourMasters/2ship2harkinian" },
-    { "id": "oot-soh",    "name": "Zelda: Ocarina of Time (Ship of Harkinian)", "console": "n64", "kind": "decomp", "repo": "https://github.com/HarbourMasters/Shipwright" },
+    { "id": "mm-2s2h",    "name": "Zelda: Majora's Mask (2 Ship 2 Harkinian)", "console": "n64", "shell": "#d4af37", "kind": "decomp", "repo": "https://github.com/HarbourMasters/2ship2harkinian" },
+    { "id": "oot-soh",    "name": "Zelda: Ocarina of Time (Ship of Harkinian)", "console": "n64", "shell": "#d4af37", "kind": "decomp", "repo": "https://github.com/HarbourMasters/Shipwright" },
     { "id": "sm64",       "name": "Super Mario 64",           "console": "n64", "kind": "build",  "repo": "https://sm64pc.info/sm64pcbuilder2/" },
     { "id": "bk",         "name": "Banjo-Kazooie",            "console": "n64", "kind": "recomp", "repo": "https://github.com/BanjoRecomp/BanjoRecomp", "config": { "format": "recompfrontend", "dir": "~/.config/BanjoRecompiled" } },
     { "id": "sf64",       "name": "Star Fox 64 (Starship)",   "console": "n64", "kind": "decomp", "repo": "https://github.com/HarbourMasters/starship" },
