@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { openPath, openUrl } from "@tauri-apps/plugin-opener";
   import Cartridge from "$lib/Cartridge.svelte";
   import Disc from "$lib/Disc.svelte";
   import ConsoleIcon from "$lib/ConsoleIcon.svelte";
@@ -25,55 +25,44 @@
   let settingsOpen = $state(false);
   // Every port the catalog knows for one system, with links to the projects.
   let knownFor = $state<string | null>(null);
-  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen || quitOpen || importRows !== null;
+  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen || quitOpen;
 
-  // Importing game files: scan a folder, match files to ports, set them up in one go.
-  type Found = { path: string; port: string; by: string; detail: string; modified: boolean };
-  type ImportRow = { port: Port; file: Found; others: number; use: boolean; state: string };
-  let importRows = $state<ImportRow[] | null>(null);
-  let importing = $state(false);
-  async function importGameFiles() {
-    if (!catalog || importing) return;
-    const dir = await open({ directory: true, title: "Folder with your game files", defaultPath: library?.roms_dir });
-    if (typeof dir !== "string") return;
-    importing = true;
+  // ROM folder: <root>/<system>/<game>/, created on first choice and synced on start and Rescan.
+  type RomSummary = { ready: number; installed: number; assigned: number };
+  let romSummary = $state<RomSummary | null>(null);
+  let syncing = $state(false);
+  async function syncRoms() {
+    if (!library?.roms_dir) return;
+    syncing = true;
     try {
-      const found = await invoke<Found[]>("scan_roms", { dir });
-      await Promise.all(catalog.ports.filter((p) => isInstalled(p.id)).map(refreshRom));
-      const rows: ImportRow[] = [];
-      for (const port of catalog.ports) {
-        const files = found.filter((f) => f.port === port.id);
-        if (!files.length) continue;
-        const ready = isInstalled(port.id) && romReady(port.id);
-        const state = !isInstalled(port.id) ? "Used when you install it" : ready ? "Already has a game file" : "Ready to play after import";
-        rows.push({ port, file: files[0], others: files.length - 1, use: !files[0].modified && !ready, state });
-      }
-      importRows = rows;
+      romSummary = await invoke<RomSummary>("sync_roms");
+      library = await invoke("get_library");
+      if (game) await refreshRom(game);
+      if (romSummary.assigned) flash(`${romSummary.assigned} game file${romSummary.assigned === 1 ? "" : "s"} found in the ROM folder`);
     } catch (e) {
       error = String(e);
     } finally {
-      importing = false;
+      syncing = false;
     }
   }
-  async function applyImport() {
-    if (!importRows) return;
-    let count = 0;
-    for (const row of importRows.filter((r) => r.use)) {
-      try {
-        if (isInstalled(row.port.id)) {
-          await invoke("select_rom", { id: row.port.id, path: row.file.path });
-          await refreshRom(row.port);
-        } else {
-          await invoke("remember_rom", { id: row.port.id, path: row.file.path });
-        }
-        count++;
-      } catch (e) {
-        error = `${displayName(row.port)}: ${e}`;
-      }
+  async function chooseRomFolder() {
+    const dir = await open({ directory: true, title: "Choose where your game files live", defaultPath: library?.roms_dir || undefined });
+    if (typeof dir !== "string") return;
+    syncing = true;
+    try {
+      romSummary = await invoke<RomSummary>("set_roms_dir", { dir });
+      library = await invoke("get_library");
+      if (game) await refreshRom(game);
+      flash("ROM folder ready: put each game's file in its own folder");
+    } catch (e) {
+      error = String(e);
+    } finally {
+      syncing = false;
     }
-    importRows = null;
-    library = await invoke("get_library");
-    flash(`${count} game file${count === 1 ? "" : "s"} set up`);
+  }
+  function romFolderAction() {
+    if (library?.roms_dir) openPath(library.roms_dir).catch((e) => (error = String(e)));
+    else chooseRomFolder();
   }
 
   // The footer shows the controls of whatever was used last: controller, or keyboard/mouse.
@@ -310,6 +299,7 @@
       library = await invoke<Library>("get_library");
       await Promise.all(catalog.ports.map((port) => loadCover(port.id)));
       scrapeMissing();
+      syncRoms();
     } catch (e) {
       error = String(e);
     }
@@ -350,8 +340,7 @@
   let quitOpen = $state(false);
   let quitYes = $state(false);
   function back() {
-    if (importRows) importRows = null;
-    else if (knownFor) knownFor = null;
+    if (knownFor) knownFor = null;
     else if (settingsOpen) settingsOpen = false;
     else if (view === "games") view = "systems";
     else {
@@ -414,7 +403,7 @@
     if (e.target instanceof HTMLInputElement || editingName || searchOpen) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
-      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: importGameFiles, Tab: toggleAll, k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: romFolderAction, Tab: toggleAll, k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
     };
     const action = actions[e.key];
     if (action) {
@@ -453,11 +442,6 @@
       if (action === "b") knownFor = null;
       return;
     }
-    if (importRows) {
-      if (action === "b") importRows = null;
-      else if (action === "a") applyImport();
-      return;
-    }
     const actions: Record<string, () => void> = {
       left: () => move(-1), right: () => move(1), a: confirm, b: back, y: openSettings,
       select: toggleAll, start: openSearch, x: () => system && (knownFor = system.id),
@@ -492,8 +476,17 @@
 <main class:pad-mode={inputMode === "pad"} style="--accent: {system?.info.color ?? '#f2b04c'}">
   <header>
     <h1>PortShelf</h1>
-    <button class="ghost" onclick={importGameFiles} disabled={importing}>{importing ? "Scanning…" : "Import game files"}</button>
-    <button class="ghost" onclick={async () => (library = await invoke("rescan"))}>Rescan</button>
+    {#if library?.roms_dir}
+      <span class="romchip">
+        <button class="ghost" onclick={romFolderAction} title="Open {library.roms_dir}">
+          ROMs · {syncing ? "syncing…" : romSummary ? `${romSummary.ready} of ${romSummary.installed} ready` : "folder"}
+        </button>
+        <button class="link" onclick={chooseRomFolder}>Change</button>
+      </span>
+    {:else if library}
+      <button class="ghost" onclick={chooseRomFolder}>Choose ROM folder</button>
+    {/if}
+    <button class="ghost" onclick={async () => { library = await invoke("rescan"); await syncRoms(); }}>Rescan</button>
   </header>
 
   {#if error}
@@ -626,42 +619,6 @@
           <span><kbd>Esc</kbd> Cancel</span>
         {/if}
       </p>
-    </div>
-  </div>
-{/if}
-
-{#if importRows}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="scrim center" onclick={() => (importRows = null)}>
-    <div class="dialog import" role="dialog" aria-modal="true" aria-labelledby="import-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-      <h2 id="import-title">Import game files</h2>
-      {#if importRows.length}
-        <p class="muted">Files are identified by the game code stored in them, or by their name. Copies that look modified (a different name or internal title) are left unchecked: ports need the original game.</p>
-        <ul class="import-list">
-          {#each importRows as row (row.port.id)}
-            <li>
-              <label>
-                <input type="checkbox" bind:checked={row.use} />
-                <span class="thumb">{#if covers[row.port.id]}<img src={covers[row.port.id]} alt="" />{/if}</span>
-                <span class="info">
-                  <span class="name">{displayName(row.port)}</span>
-                  <span class="meta">{row.file.path.split("/").pop()}{row.others ? ` (+${row.others} other file${row.others === 1 ? "" : "s"})` : ""}</span>
-                  <span class="meta">
-                    {row.state}{#if row.file.modified} · <span class="warn">may be modified</span>{/if}{#if row.file.by === "name"} · matched by name{/if}
-                  </span>
-                </span>
-              </label>
-            </li>
-          {/each}
-        </ul>
-        <div class="choices">
-          <button onclick={() => (importRows = null)}>Cancel</button>
-          <button class="on" onclick={applyImport}>Import {importRows.filter((r) => r.use).length}</button>
-        </div>
-      {:else}
-        <p class="muted">No game file in that folder matches a known port.</p>
-        <div class="choices"><button class="on" onclick={() => (importRows = null)}>Close</button></div>
-      {/if}
     </div>
   </div>
 {/if}
@@ -848,6 +805,7 @@
   }
   code { font-size: 12px; color: #9b948a; }
   .muted { color: #9b948a; }
+  .romchip { display: inline-flex; align-items: center; gap: 6px; }
   .scrim.center { place-items: center; padding-top: 0; }
   .dialog {
     width: min(380px, 90vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px;
@@ -860,17 +818,6 @@
     background: #2c2a33; font-weight: 600;
   }
   .choices button.on { background: #f2b04c; border-color: #f2b04c; color: #1a1510; }
-  .dialog.import { width: min(640px, 92vw); text-align: left; }
-  .dialog.import h2 { text-align: center; }
-  .dialog.import .muted { font-size: 13px; margin: 0 0 12px; }
-  .import-list { list-style: none; padding: 0; margin: 0 0 16px; max-height: 50vh; overflow-y: auto; display: grid; gap: 6px; }
-  .import-list label { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; background: #222127; cursor: pointer; }
-  .import-list .thumb { width: 56px; height: 40px; flex: none; border-radius: 4px; overflow: hidden; background: #2d2c33; }
-  .import-list .thumb img { width: 100%; height: 100%; object-fit: cover; }
-  .import-list .info { display: flex; flex-direction: column; min-width: 0; }
-  .import-list .name { font-weight: 600; }
-  .import-list .meta { font-size: 12px; color: #9b948a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .import-list .warn { color: #f2b04c; }
   .dialog-hints { display: flex; gap: 16px; justify-content: center; margin: 16px 0 0; font-size: 12px; color: #8f877b; }
   .dialog-hints span { display: inline-flex; align-items: center; gap: 4px; }
   .scrim { position: fixed; inset: 0; background: rgba(8, 8, 10, 0.6); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }

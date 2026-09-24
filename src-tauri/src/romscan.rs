@@ -61,6 +61,20 @@ fn disc_id(path: &Path) -> Option<String> {
     id.iter().all(|c| c.is_ascii_alphanumeric()).then(|| String::from_utf8_lossy(id).into_owned())
 }
 
+/// Folder name for a game: "Legend of Zelda, The - Majora's Mask" -> "legend_of_zelda_majoras_mask".
+pub fn game_folder(title: &str) -> String {
+    normalize(&title.replace('\'', "")).replace(' ', "_")
+}
+
+/// Game files directly inside `dir` (a game's own folder), whatever their names.
+pub fn files_in(dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = fs::read_dir(dir)
+        .map(|entries| entries.flatten().map(|e| e.path()).filter(|p| p.is_file() && console_of(p).is_some()).collect())
+        .unwrap_or_default();
+    out.sort();
+    out
+}
+
 fn normalize(title: &str) -> String {
     let base = title.split(" (").next().unwrap_or(title).split(" [").next().unwrap_or(title);
     let base = base.replace(", The", "").replace("The ", "");
@@ -156,6 +170,13 @@ mod tests {
     fn names() {
         assert_eq!(normalize("Legend of Zelda, The - Twilight Princess (USA)"), "legend of zelda twilight princess");
         assert_eq!(normalize("Super Mario World (USA) [!]"), "super mario world");
+    }
+
+    #[test]
+    fn folders() {
+        assert_eq!(game_folder("Legend of Zelda, The - Majora's Mask"), "legend_of_zelda_majoras_mask");
+        assert_eq!(game_folder("Chameleon Twist"), "chameleon_twist");
+        assert_eq!(game_folder("Dr. Mario 64"), "dr_mario_64");
     }
 
     #[test]

@@ -164,7 +164,7 @@ fn scan() -> Library {
             );
         }
     }
-    Library { roms_dir: "/mnt/main/Roms/ports/roms".into(), installed, overrides: BTreeMap::new(), pending_roms: BTreeMap::new() }
+    Library { roms_dir: String::new(), installed, overrides: BTreeMap::new(), pending_roms: BTreeMap::new() }
 }
 
 fn load_library() -> Result<Library, String> {
@@ -409,19 +409,89 @@ struct InstallProgress {
     total: Option<u64>,
 }
 
-/// Finds game files in a folder and says which ports each one fits.
-#[tauri::command]
-async fn scan_roms(dir: String) -> Result<Vec<romscan::Found>, String> {
-    let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || romscan::scan(Path::new(&dir), &catalog)).await.map_err(|e| e.to_string())
+#[derive(Serialize)]
+struct RomSummary {
+    /// Installed ports with their game file in place.
+    ready: usize,
+    installed: usize,
+    /// Game files set up in this sync (installed ports) or kept for later (not installed).
+    assigned: usize,
 }
 
-/// Game files picked for ports that are not installed yet; used when they get installed.
+/// Game folder of a port inside the ROM folder: <root>/<system>/<game>.
+fn port_folder(root: &Path, port: &Value) -> Option<PathBuf> {
+    let title = port["title"].as_str().or(port["name"].as_str())?;
+    Some(root.join(port["console"].as_str()?).join(romscan::game_folder(title)))
+}
+
+/// Chooses the ROM folder and creates <system>/<game>/ for every game in the catalog.
 #[tauri::command]
-fn remember_rom(id: String, path: String) -> Result<(), String> {
+async fn set_roms_dir(dir: String) -> Result<RomSummary, String> {
+    let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
+    let root = PathBuf::from(&dir);
+    for port in catalog["ports"].as_array().into_iter().flatten() {
+        if let Some(folder) = port_folder(&root, port) {
+            fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+        }
+    }
     let mut lib = load_library()?;
-    lib.pending_roms.insert(id, path);
-    save_library(&lib)
+    lib.roms_dir = dir;
+    save_library(&lib)?;
+    sync_roms().await
+}
+
+/// Gives every port without a game file the one from the ROM folder: a file in the game's
+/// own folder first, otherwise an original copy found anywhere in the ROM folder by its
+/// game code or name. Ports that already have a game file are left as they are.
+#[tauri::command]
+async fn sync_roms() -> Result<RomSummary, String> {
+    let lib = load_library()?;
+    if lib.roms_dir.is_empty() {
+        return Ok(RomSummary { ready: 0, installed: lib.installed.len(), assigned: 0 });
+    }
+    let root = PathBuf::from(&lib.roms_dir);
+    let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
+    // Games added to the catalog since the folder was chosen get their folder too.
+    for port in catalog["ports"].as_array().into_iter().flatten() {
+        if let Some(folder) = port_folder(&root, port) {
+            let _ = fs::create_dir_all(folder);
+        }
+    }
+    let found = {
+        let (root, catalog) = (root.clone(), catalog.clone());
+        tauri::async_runtime::spawn_blocking(move || romscan::scan(&root, &catalog)).await.map_err(|e| e.to_string())?
+    };
+    let mut assigned = 0;
+    for port in catalog["ports"].as_array().into_iter().flatten() {
+        let id = port["id"].as_str().unwrap_or_default().to_string();
+        let console = port["console"].as_str().unwrap_or_default().to_string();
+        let in_folder = port_folder(&root, port).map(|f| romscan::files_in(&f)).unwrap_or_default().into_iter().next();
+        let matched = found.iter().find(|f| f.port == id && !f.modified).map(|f| PathBuf::from(&f.path));
+        let Some(file) = in_folder.or(matched) else { continue };
+        let path = file.to_string_lossy().into_owned();
+        if load_library()?.installed.contains_key(&id) {
+            if !rom_status(id.clone(), console)?.ready && select_rom(id, path).is_ok() {
+                assigned += 1;
+            }
+        } else {
+            let mut lib = load_library()?;
+            if lib.pending_roms.get(&id) != Some(&path) {
+                lib.pending_roms.insert(id, path);
+                save_library(&lib)?;
+                assigned += 1;
+            }
+        }
+    }
+    let lib = load_library()?;
+    let ready = lib
+        .installed
+        .keys()
+        .filter(|id| {
+            let console = catalog["ports"].as_array().and_then(|ps| ps.iter().find(|p| p["id"] == id.as_str())).and_then(|p| p["console"].as_str()).unwrap_or_default();
+            rom_status((*id).clone(), console.to_string()).is_ok_and(|s| s.ready)
+        })
+        .count();
+    Ok(RomSummary { ready, installed: lib.installed.len(), assigned })
 }
 
 /// The operating system, for knowing which catalog install rule applies.
@@ -610,7 +680,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, scan_roms, remember_rom])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);

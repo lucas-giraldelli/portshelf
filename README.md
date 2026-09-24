@@ -15,7 +15,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - Installs ports from their projects' latest GitHub release (zip, tar.gz or AppImage, nested archives included) into `~/.local/share/PortShelf/ports/<port id>/`; only the port is downloaded, the game file always comes from the user
 - Ports start straight into the game, skipping each port's own launcher; the shelf hides while a game runs and returns when it exits
 - A game file is required before a port can start; it is set up the way each port expects (a big-endian copy for recompilation ports, the file path for Dusklight, a link next to the executable for Harbour Masters ports)
-- Import game files: scans a folder and matches each file to its ports by the game code stored in the file (N64 cartridge header; GameCube disc header, also inside RVZ and WIA images) or by its No-Intro or Redump name. Copies that look modified are left unchecked, since ports need the original game. Files for ports not installed yet are kept and set up when the port is installed
+- ROM folder: chosen once, it gets a folder per game (`<system>/<game>/`, for example `n64/chameleon_twist/`). A file placed in a game's folder is used for that game; files anywhere else in the ROM folder are identified by the game code stored in them (N64 cartridge header; GameCube disc header, also inside RVZ and WIA images) or by their No-Intro or Redump name, and copies that look modified are skipped, since ports need the original game. The folder is synced on start and on Rescan; files for ports not installed yet are set up when the port is installed
 - Settings editor for ports that store their options as JSON (the RecompFrontend family)
 - Cover art found automatically, with manual cover choice, renaming and online search per game
 - Search across every system
@@ -33,7 +33,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Settings | S | North face button (Xbox Y, PlayStation Triangle) |
 | Known ports of the system | K | West face button (Xbox X, PlayStation Square) |
 | Rename | R | |
-| Import game files | I | |
+| Open the ROM folder | I | |
 | Search every system | Ctrl+F | Start |
 | Every known port or installed only | Tab | Select |
 | Previous or next system while viewing games | | LB / RB |
@@ -48,7 +48,7 @@ Controllers are read natively with gilrs, so they work where the webview has no 
 | Library (installed ports and how to start them) | `~/.config/portshelf/library.json` |
 | Cover art | `~/.config/portshelf/covers/<port id>.png` (replaced covers are kept in `covers/replaced/`) |
 | Cover index cache | `~/.cache/portshelf/` |
-| Game files | a library folder per system, `/mnt/main/Roms/ports/roms/<system>/` by default |
+| Game files | the ROM folder you choose, organised as `<system>/<game>/` |
 
 The library is created on first run by scanning the usual install locations; Rescan refreshes the entries it finds and keeps covers chosen by hand.
 
