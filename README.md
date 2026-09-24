@@ -6,9 +6,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 **Work in progress.**
 
-![PortShelf systems screen](docs/portshelf.jpg)
-
-[Video: browsing systems and games (31 s)](docs/portshelf.mp4)
+![Browsing systems and games in PortShelf](docs/portshelf.webp)
 
 ## Features
 
