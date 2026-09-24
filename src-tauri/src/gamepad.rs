@@ -14,9 +14,14 @@ pub fn spawn(app: AppHandle) {
         let (mut held_x, mut held_y) = (0i8, 0i8);
         loop {
             while let Some(event) = gilrs.next_event() {
-                // Only while the shelf is shown: a game running on top gets the controller alone.
-                let visible = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false);
-                if !visible {
+                // Only when the shelf is the focused window: a game (or anything else) in front
+                // gets the controller alone. Controllers are read system-wide, so without this
+                // every open shelf would react.
+                let focused = app
+                    .get_webview_window("main")
+                    .and_then(|w| Some(w.is_visible().ok()? && w.is_focused().ok()?))
+                    .unwrap_or(false);
+                if !focused {
                     continue;
                 }
                 let action = match event.event {

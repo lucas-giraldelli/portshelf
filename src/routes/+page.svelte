@@ -5,6 +5,7 @@
   import Cartridge from "$lib/Cartridge.svelte";
   import Disc from "$lib/Disc.svelte";
   import ConsoleIcon from "$lib/ConsoleIcon.svelte";
+  import PadGlyph from "$lib/PadGlyph.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -28,6 +29,9 @@
 
   // The footer shows the controls of whatever was used last: controller, or keyboard/mouse.
   let inputMode = $state<"keys" | "pad">("keys");
+  $effect(() => {
+    invoke("set_cursor_visible", { visible: inputMode !== "pad" }).catch(() => {});
+  });
 
   // Ctrl+F: find a game in every system and jump to it on its shelf.
   let searchOpen = $state(false);
@@ -66,9 +70,22 @@
   const isInstalled = (id: string) => !!library?.installed[id];
   const displayName = (port: Port) => library?.overrides?.[port.id]?.name ?? port.name;
 
+  // Images are decoded before they are shown; otherwise WebKit decodes each one the first
+  // time it scrolls into the carousel and the item flickers.
+  const decode = (src: string) => {
+    const img = new Image();
+    img.src = src;
+    return img.decode().catch(() => {});
+  };
   async function loadCover(id: string) {
-    covers[id] = await invoke<string | null>("get_cover", { id });
+    const cover = await invoke<string | null>("get_cover", { id });
+    if (cover) await decode(cover);
+    covers[id] = cover;
   }
+  for (const media of ["n64-cartridge", "snes-cartridge", "gba-cartridge", "md-cartridge", "gc-disc", "ps1-disc", "ps2-disc", "x360-disc"]) {
+    decode(`/media/${media}.png`);
+  }
+  for (const id of ["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360"]) decode(`/consoles/${id}.png`);
 
   // Fill in missing covers one at a time in the background (libretro-thumbnails).
   async function scrapeMissing() {
@@ -352,15 +369,11 @@
   load();
 </script>
 
-<svelte:window onkeydown={onKey} onmousedown={() => (inputMode = "keys")} />
+<svelte:window onkeydown={onKey} onmousedown={() => (inputMode = "keys")} onmousemove={(e) => { if (e.movementX || e.movementY) inputMode = "keys"; }} />
 
-<main style="--accent: {system?.info.color ?? '#f2b04c'}">
+<main class:pad-mode={inputMode === "pad"} style="--accent: {system?.info.color ?? '#f2b04c'}">
   <header>
     <h1>PortShelf</h1>
-    <label class="toggle">
-      <input type="checkbox" bind:checked={showAll} onchange={() => { systemIndex = 0; gameIndex = 0; }} />
-      Show every known port
-    </label>
     <button class="ghost" onclick={async () => (library = await invoke("rescan"))}>Rescan</button>
   </header>
 
@@ -449,12 +462,12 @@
 
   <footer>
     {#if inputMode === "pad"}
-      {#if view === "games"}<span><kbd class="pad b">B</kbd> Systems</span>{/if}
-      <span><kbd class="pad">✥</kbd> Browse</span>
-      <span><kbd class="pad a">A</kbd> {primaryLabel}</span>
-      {#if view === "games"}<span><kbd class="pad y">Y</kbd> Settings</span>{/if}
+      {#if view === "games"}<span><PadGlyph button="east" /> Systems</span>{/if}
+      <span><PadGlyph button="dpad" /> Browse</span>
+      <span><PadGlyph button="south" /> {primaryLabel}</span>
+      {#if view === "games"}<span><PadGlyph button="north" /> Settings</span>{/if}
       {#if view === "games"}<span><kbd class="pad">LB</kbd><kbd class="pad">RB</kbd> System</span>{/if}
-      <span><kbd class="pad x">X</kbd> Known ports</span>
+      <span><PadGlyph button="west" /> Known ports</span>
       <span><kbd class="pad">Start</kbd> Search</span>
       <span><kbd class="pad">Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
     {:else}
@@ -572,7 +585,6 @@
   }
   header { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
   h1 { font-size: 22px; letter-spacing: 0.5px; margin: 4px 0; flex: 1; }
-  .toggle { display: flex; gap: 8px; align-items: center; color: #bdb4a7; }
   button { font: inherit; color: inherit; cursor: pointer; }
   .ghost { background: none; border: 1px solid #4a4540; border-radius: 6px; padding: 5px 12px; }
   .primary { background: #f2b04c; color: #1a1510; border: 0; border-radius: 8px; padding: 9px 28px; font-weight: 700; }
@@ -584,6 +596,7 @@
   .carousel { position: relative; flex: 1; min-height: 280px; }
   .slot {
     position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%;
+    will-change: transform, opacity;  /* own compositing layer: no repaint flicker while moving */
     background: none; border: 0; padding: 0;
     transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.28s ease;
   }
@@ -621,10 +634,8 @@
   footer { display: flex; gap: 22px; justify-content: center; color: #8f877b; font-size: 13px; padding: 8px 0 4px; flex-wrap: wrap; }
   footer span { display: inline-flex; align-items: center; gap: 4px; }
   kbd.pad { border-radius: 10px; min-width: 22px; font-weight: 700; }
-  kbd.pad.a { background: #3f8f3f; border-color: #3f8f3f; color: #fff; }
-  kbd.pad.b { background: #b8413a; border-color: #b8413a; color: #fff; }
-  kbd.pad.x { background: #2f63b8; border-color: #2f63b8; color: #fff; }
-  kbd.pad.y { background: #c9a227; border-color: #c9a227; color: #1a1510; }
+  /* Using the controller: no mouse pointer until the mouse moves again. */
+  :global(body:has(main.pad-mode)), :global(body:has(main.pad-mode) *) { cursor: none !important; }
   kbd {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;

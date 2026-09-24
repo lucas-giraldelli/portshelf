@@ -347,6 +347,12 @@ fn unlock_cover(id: String) -> Result<(), String> {
     save_library(&lib)
 }
 
+/// Hides the pointer while a controller is in use (the CSS cursor only updates on the next mouse move).
+#[tauri::command]
+fn set_cursor_visible(window: tauri::WebviewWindow, visible: bool) -> Result<(), String> {
+    window.set_cursor_visible(visible).map_err(|e| e.to_string())
+}
+
 #[derive(Serialize)]
 struct RomStatus {
     /// True when the port has what it needs to boot.
@@ -460,7 +466,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
