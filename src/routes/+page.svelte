@@ -61,12 +61,27 @@
       syncing = false;
     }
   }
-  // The ROM folder of the system in view (or the whole folder before one is chosen).
-  function romFolderAction() {
+  // The ROM button opens the system's file chooser inside the system's folder, where every
+  // game has its own folder; the picked file goes to the game whose folder it is in.
+  async function romFolderAction() {
     if (!library?.roms_dir) return chooseRomFolder();
-    const dir = system ? `${library.roms_dir}/${system.id}` : library.roms_dir;
-    invoke("open_folder", { path: dir }).catch((e) => (error = String(e)));
+    const consoleId = system?.id;
+    const picked = await open({
+      title: consoleId ? `${catalog?.consoles[consoleId].name} game files` : "Game files",
+      defaultPath: consoleId ? `${library.roms_dir}/${consoleId}` : library.roms_dir,
+    });
+    if (typeof picked !== "string") return;
+    try {
+      const ids = await invoke<string[]>("assign_rom", { path: picked });
+      library = await invoke("get_library");
+      const names = ids.map((id) => catalog?.ports.find((p) => p.id === id)).filter((p): p is Port => !!p);
+      await Promise.all(names.filter((p) => isInstalled(p.id)).map(refreshRom));
+      flash(`Game file set for ${names.map(displayName).join(" and ")}`);
+    } catch (e) {
+      error = String(e);
+    }
   }
+
   let systemRoms = $derived.by(() => {
     if (!system) return null;
     const installed = system.ports.filter((p) => isInstalled(p.id));

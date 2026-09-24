@@ -238,21 +238,6 @@ fn clean_command(program: &str) -> Command {
     cmd
 }
 
-/// Opens a folder in the system's file manager.
-#[tauri::command]
-fn open_folder(path: String) -> Result<(), String> {
-    fs::create_dir_all(&path).map_err(|e| format!("{path}: {e}"))?;
-    let opener = if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" };
-    clean_command(opener)
-        .arg(&path)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| format!("{opener}: {e}"))
-}
-
 /// Starts the port and hides the shelf while it runs; the shelf comes back when the
 /// game exits. The game is its own process, so closing the shelf does not stop it.
 #[tauri::command]
@@ -463,6 +448,14 @@ struct RomSummary {
 fn port_folder(root: &Path, port: &Value) -> Option<PathBuf> {
     let title = port["title"].as_str().or(port["name"].as_str())?;
     Some(root.join(port["console"].as_str()?).join(romscan::game_folder(title)))
+}
+
+/// Game file picked for a port that is not installed yet; used when it gets installed.
+#[tauri::command]
+fn remember_rom(id: String, path: String) -> Result<(), String> {
+    let mut lib = load_library()?;
+    lib.pending_roms.insert(id, path);
+    save_library(&lib)
 }
 
 /// Chooses the ROM folder and creates <system>/<game>/ for every game in the catalog.
@@ -721,7 +714,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, open_folder])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, remember_rom, assign_rom])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);
