@@ -458,6 +458,39 @@ fn remember_rom(id: String, path: String) -> Result<(), String> {
     save_library(&lib)
 }
 
+/// Uses a game file the user picked: for the ports whose game folder it sits in, or else
+/// for the ports its game code or name identifies. Returns the ids of the ports it went to.
+#[tauri::command]
+fn assign_rom(path: String) -> Result<Vec<String>, String> {
+    let lib = load_library()?;
+    let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
+    let file = PathBuf::from(&path);
+    let parent = file.parent().ok_or("invalid file")?.to_path_buf();
+    let root = PathBuf::from(&lib.roms_dir);
+    let mut ids: Vec<String> = catalog["ports"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|p| !lib.roms_dir.is_empty() && port_folder(&root, p).as_deref() == Some(parent.as_path()))
+        .filter_map(|p| p["id"].as_str().map(String::from))
+        .collect();
+    if ids.is_empty() {
+        ids = romscan::scan(&parent, &catalog).into_iter().filter(|f| f.path == path).map(|f| f.port).collect();
+        ids.dedup();
+    }
+    if ids.is_empty() {
+        return Err("PortShelf could not tell which game this file is. Put it in the game's own folder.".into());
+    }
+    for id in &ids {
+        if lib.installed.contains_key(id) {
+            select_rom(id.clone(), path.clone())?;
+        } else {
+            remember_rom(id.clone(), path.clone())?;
+        }
+    }
+    Ok(ids)
+}
+
 /// Chooses the ROM folder and creates <system>/<game>/ for every game in the catalog.
 #[tauri::command]
 async fn set_roms_dir(dir: String) -> Result<RomSummary, String> {
