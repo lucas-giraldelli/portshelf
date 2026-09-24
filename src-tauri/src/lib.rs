@@ -202,9 +202,10 @@ fn rescan() -> Result<Library, String> {
     Ok(lib)
 }
 
-/// Starts the port detached from portshelf, so closing the shelf keeps the game running.
+/// Starts the port and hides the shelf while it runs; the shelf comes back when the
+/// game exits. The game is its own process, so closing the shelf does not stop it.
 #[tauri::command]
-fn launch(id: String) -> Result<(), String> {
+fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let install = installed(&id)?;
     if let Some(boot) = &install.boot_setting {
         set_config(id.clone(), boot.file.clone(), boot.key.clone(), boot.value.clone())?;
@@ -214,7 +215,19 @@ fn launch(id: String) -> Result<(), String> {
     if let Some(cwd) = &install.cwd {
         cmd.current_dir(cwd);
     }
-    cmd.spawn().map(|_| ()).map_err(|e| format!("{}: {e}", install.exec))
+    let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", install.exec))?;
+    let window = tauri::Manager::get_webview_window(&app, "main");
+    if let Some(w) = &window {
+        let _ = w.hide();
+    }
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        if let Some(w) = window {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    });
+    Ok(())
 }
 
 /// Cover art as a data URL: the library's explicit cover, or covers/<id>.{png,jpg,webp}.
@@ -423,15 +436,24 @@ fn select_rom(id: String, path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebKitGTK's DMA-BUF renderer hits a Wayland protocol error on NVIDIA; the
+    // fallback renderer works everywhere. Respect an explicit choice from the user.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Tiling compositors draw no title bar, so GTK adds its own buttons; drop them on
             // Linux. Windows and macOS keep their native title bar.
-            #[cfg(target_os = "linux")]
             if let Some(window) = tauri::Manager::get_webview_window(app, "main") {
+                #[cfg(target_os = "linux")]
                 window.set_decorations(false)?;
+                // Development builds are told apart by the title (a compositor rule keeps them aside).
+                #[cfg(debug_assertions)]
+                window.set_title("portshelf (dev)")?;
             }
             let _ = app;
             Ok(())

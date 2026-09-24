@@ -38,6 +38,8 @@ pnpm app   # tauri dev, also rebuilding when catalog/ changes; sets WEBKIT_DISAB
 
 On Linux the window has no title bar (tiling compositors do not draw one, so GTK would add its own buttons); Windows and macOS keep their native one.
 
+To build the AppImage: `pnpm bundle` (output in `src-tauri/target/release/bundle/appimage/`). `NO_STRIP` is needed on distributions whose libraries are newer than linuxdeploy's `strip` understands.
+
 ## Credits
 
 Console photos: Evan-Amos and others on Wikimedia Commons, see [CREDITS.md](CREDITS.md).

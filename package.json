@@ -11,7 +11,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
-    "app": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri dev --additional-watch-folders catalog"
+    "app": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri dev --additional-watch-folders catalog",
+    "bundle": "NO_STRIP=true tauri build --bundles appimage"
   },
   "license": "MIT",
   "dependencies": {
