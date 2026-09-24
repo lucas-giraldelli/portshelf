@@ -85,7 +85,8 @@ class Shelf {
     setTimeout(() => (this.status = ""), 3000);
   }
   fail(e: unknown) {
-    this.error = String(e);
+    const [code, found, needs] = String(e).split("\t");
+    this.error = code === "wrong-version" ? tr("msg.wrongVersion", { found, needs }) : String(e);
   }
 
   // ---- loading ----

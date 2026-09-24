@@ -53,7 +53,12 @@
   {#if shelf.selfManaged(port.id)}
     <p class="rom">{tr("game.asksForFile")}</p>
   {:else if installed && shelf.roms[port.id] && !ready}
-    <p class="rom missing">{tr("game.missingFile")}</p>
+    <p class="rom missing">
+      {#if shelf.roms[port.id].wrong}{tr("game.wrongVersion", { found: shelf.roms[port.id].wrong! })}{:else}{tr("game.missingFile")}{/if}
+    </p>
+  {/if}
+  {#if port.rom && !(installed && ready)}
+    <p class="rom needs">{tr("game.needs", { release: port.rom.needs })}</p>
   {/if}
 
   <div class="actions">
@@ -94,6 +99,7 @@
   }
   .rom { font-size: 15px; }
   .rom.missing { color: var(--accent); }
+  .rom.needs { font-size: 14px; }
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
   .actions.small { margin-top: 6px; gap: 16px; }
   .primary.progress {

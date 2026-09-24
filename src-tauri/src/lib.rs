@@ -138,7 +138,7 @@ fn scan() -> Library {
         ("dk64", "~/Applications/DK64Recompiled/DK64Recompiled", &["--game", "dk64"], Some("~/.config/DK64Recompiled")),
         ("mt64", "/mnt/main/Roms/mariotennis64recomp/run/play.sh", &["--game", "mt64"], Some("/mnt/main/Roms/mariotennis64recomp/run")),
         ("tp", "~/Applications/Dusklight.AppImage", &[], Some("~/.local/share/TwilitRealm/Dusklight")),
-        ("bm64", "~/Applications/BM64Recompiled/BM64Recompiled", &["--game", "bm64"], Some("~/.config/BM64Recompiled")),
+        ("bm64", "~/Applications/BM64Recompiled/BM64Recompiled", &["--game", "bm64_us"], Some("~/.config/BM64Recompiled")),
         // Harbour Masters ports boot straight into the game and keep their settings next to the AppImage.
         ("oot-soh", "~/Applications/SoH/soh.appimage", &[], Some("~/Applications/SoH")),
         ("mm-2s2h", "~/Applications/2Ship/2ship.appimage", &[], Some("~/Applications/2Ship")),
@@ -161,6 +161,8 @@ fn scan() -> Library {
                         "tp" => RomSpec::ConfigKey { file: "config".into(), key: "backend.isoPath".into() },
                         "oot-soh" => RomSpec::Extracted { archive: "oot.o2r".into() },
                         "mm-2s2h" => RomSpec::Extracted { archive: "mm.o2r".into() },
+                        // Recomps store the ROM as <game id>.z64.
+                        "bm64" => RomSpec::Stored { file: "bm64_us.z64".into() },
                         other => RomSpec::Stored { file: format!("{}.z64", other.to_uppercase()) },
                     }),
                 },
@@ -547,8 +549,13 @@ async fn sync_roms() -> Result<RomSummary, String> {
     for port in catalog["ports"].as_array().into_iter().flatten() {
         let id = port["id"].as_str().unwrap_or_default().to_string();
         let console = port["console"].as_str().unwrap_or_default().to_string();
-        let in_folder = port_folder(&root, port).map(|f| romscan::files_in(&f)).unwrap_or_default().into_iter().next();
-        let matched = found.iter().find(|f| f.port == id && !f.modified).map(|f| PathBuf::from(&f.path));
+        // Files of another release than the port accepts are left for the user to see.
+        let in_folder = port_folder(&root, port)
+            .map(|f| romscan::files_in(&f))
+            .unwrap_or_default()
+            .into_iter()
+            .find(|f| romscan::accepts(port, f) != Some(false));
+        let matched = found.iter().find(|f| f.port == id && !f.modified && !f.wrong_version).map(|f| PathBuf::from(&f.path));
         let Some(file) = in_folder.or(matched) else { continue };
         let path = file.to_string_lossy().into_owned();
         if load_library()?.installed.contains_key(&id) {
@@ -717,6 +724,9 @@ struct RomStatus {
     path: Option<String>,
     /// Folder to open the file picker in.
     browse_dir: String,
+    /// Release of a game file in the game's folder that the port does not accept
+    /// (for example the Rev 1 when it needs the first release).
+    wrong: Option<String>,
 }
 
 fn config_file(install: &Install, file: &str) -> Option<PathBuf> {
@@ -752,28 +762,38 @@ fn rom_status(id: String, console: String) -> Result<RomStatus, String> {
             (done || rom.is_some(), rom.map(|p| p.to_string_lossy().into()))
         }
     };
-    Ok(RomStatus { ready, path, browse_dir })
+    let wrong = if ready || lib.roms_dir.is_empty() {
+        None
+    } else {
+        catalog_port(&id).ok().and_then(|port| {
+            let title = port["title"].as_str().or(port["name"].as_str()).unwrap_or_default().to_string();
+            let files = port_folder(Path::new(&lib.roms_dir), &port).map(|f| romscan::files_in(&f)).unwrap_or_default();
+            files.iter().find(|f| romscan::accepts(&port, f) == Some(false)).map(|f| romscan::release_label(f, &title))
+        })
+    };
+    Ok(RomStatus { ready, path, browse_dir, wrong })
 }
 
-/// N64 ROMs come in three byte orders; RecompFrontend stores the big-endian (.z64) one.
-fn to_z64(mut data: Vec<u8>) -> Result<Vec<u8>, String> {
-    match data.get(..4) {
-        Some([0x80, 0x37, 0x12, 0x40]) => {}
-        Some([0x37, 0x80, 0x40, 0x12]) => data.chunks_exact_mut(2).for_each(|c| c.swap(0, 1)),
-        Some([0x40, 0x12, 0x37, 0x80]) => data.chunks_exact_mut(4).for_each(|c| c.reverse()),
-        _ => return Err("this file is not an N64 ROM".into()),
-    }
-    Ok(data)
+/// Error for a game file of another release than the port accepts; the interface shows it
+/// translated: "wrong-version", the file's release and the accepted ones, tab separated.
+fn wrong_version(port: &Value, file: &Path) -> String {
+    let title = port["title"].as_str().or(port["name"].as_str()).unwrap_or_default();
+    format!("wrong-version\t{}\t{}", romscan::release_label(file, title), port["rom"]["needs"].as_str().unwrap_or_default())
 }
 
 /// Sets up the chosen game file the way the port's own launcher would.
 #[tauri::command]
 fn select_rom(id: String, path: String) -> Result<(), String> {
     let install = installed(&id)?;
+    if let Ok(port) = catalog_port(&id) {
+        if romscan::accepts(&port, Path::new(&path)) == Some(false) {
+            return Err(wrong_version(&port, Path::new(&path)));
+        }
+    }
     match install.rom.ok_or("this port does not need a game file")? {
         RomSpec::Stored { file } => {
             let dir = install.config_dir.ok_or("no config directory for this port")?;
-            let data = to_z64(fs::read(&path).map_err(|e| format!("{path}: {e}"))?)?;
+            let data = romscan::to_z64(fs::read(&path).map_err(|e| format!("{path}: {e}"))?)?;
             fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             fs::write(Path::new(&dir).join(file), data).map_err(|e| e.to_string())
         }

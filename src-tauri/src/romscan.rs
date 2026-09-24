@@ -5,9 +5,12 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::SystemTime;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct Found {
@@ -20,6 +23,8 @@ pub struct Found {
     /// Looks like a hack or a patched copy (tags in the name, or a different internal name);
     /// ports check for the original game, so these are not picked by default.
     pub modified: bool,
+    /// The port lists the releases it accepts and this file is none of them.
+    pub wrong_version: bool,
 }
 
 fn console_of(path: &Path) -> Option<&'static str> {
@@ -50,6 +55,93 @@ fn n64_header(path: &Path) -> Option<(String, String)> {
     }
     let text = |r: std::ops::Range<usize>| String::from_utf8_lossy(&b[r]).trim_matches(|c: char| c == '\0' || c.is_whitespace()).to_string();
     Some((text(0x20..0x34), text(0x3B..0x3F)))
+}
+
+/// N64 ROMs come in three byte orders; ports check the big-endian (.z64) one.
+pub fn to_z64(mut data: Vec<u8>) -> Result<Vec<u8>, String> {
+    match data.get(..4) {
+        Some([0x80, 0x37, 0x12, 0x40]) => {}
+        Some([0x37, 0x80, 0x40, 0x12]) => data.chunks_exact_mut(2).for_each(|c| c.swap(0, 1)),
+        Some([0x40, 0x12, 0x37, 0x80]) => data.chunks_exact_mut(4).for_each(|c| c.reverse()),
+        _ => return Err("this file is not an N64 ROM".into()),
+    }
+    Ok(data)
+}
+
+type HashKey = (PathBuf, u64, Option<SystemTime>, &'static str);
+static HASHES: Mutex<Option<HashMap<HashKey, String>>> = Mutex::new(None);
+
+/// Hash of a game file ("xxh3", "sha1", "md5" or "sha256", lowercase hex), N64 ROMs in .z64
+/// order. Remembered per file size and date, since the ROM folder is checked often.
+fn file_hash(path: &Path, algo: &'static str) -> Option<String> {
+    use sha2::Digest;
+    let meta = fs::metadata(path).ok()?;
+    let key = (path.to_path_buf(), meta.len(), meta.modified().ok(), algo);
+    if let Some(h) = HASHES.lock().ok()?.get_or_insert_with(HashMap::new).get(&key) {
+        return Some(h.clone());
+    }
+    let mut data = fs::read(path).ok()?;
+    if console_of(path) == Some("n64") {
+        data = to_z64(data).ok()?;
+    }
+    let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let hash = match algo {
+        "xxh3" => format!("{:016x}", xxhash_rust::xxh3::xxh3_64(&data)),
+        "sha1" => hex(&sha1::Sha1::digest(&data)),
+        "md5" => hex(&md5::Md5::digest(&data)),
+        "sha256" => hex(&sha2::Sha256::digest(&data)),
+        _ => return None,
+    };
+    HASHES.lock().ok()?.get_or_insert_with(HashMap::new).insert(key, hash.clone());
+    Some(hash)
+}
+
+/// Whether a file is one of the releases a port accepts. The catalog lists them as
+/// "algo:hex" in rom.hashes; None when it lists none (the port takes any copy).
+pub fn accepts(port: &Value, path: &Path) -> Option<bool> {
+    let hashes: Vec<&str> = port["rom"]["hashes"].as_array()?.iter().filter_map(|h| h.as_str()).collect();
+    if hashes.is_empty() {
+        return None;
+    }
+    Some(hashes.iter().any(|h| {
+        let (algo, want) = h.split_once(':').unwrap_or(("sha1", h));
+        let algo = match algo {
+            "xxh3" => "xxh3",
+            "md5" => "md5",
+            "sha256" => "sha256",
+            _ => "sha1",
+        };
+        file_hash(path, algo).is_some_and(|got| got.eq_ignore_ascii_case(want))
+    }))
+}
+
+/// Release of a game file in No-Intro style, e.g. "Banjo-Kazooie (USA) (Rev 1)", read from the
+/// N64 header's region and revision; other files are named by their file name.
+pub fn release_label(path: &Path, title: &str) -> String {
+    let stem = || path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
+    if console_of(path) != Some("n64") {
+        return stem();
+    }
+    let mut b = [0u8; 0x40];
+    if fs::File::open(path).and_then(|mut f| f.read_exact(&mut b)).is_err() {
+        return stem();
+    }
+    let Ok(h) = to_z64(b.to_vec()) else { return stem() };
+    let region = match h[0x3E] {
+        b'E' => "USA",
+        b'P' | b'X' | b'Y' => "Europe",
+        b'J' => "Japan",
+        b'U' => "Australia",
+        b'D' => "Germany",
+        b'F' => "France",
+        b'I' => "Italy",
+        b'S' => "Spain",
+        _ => return stem(),
+    };
+    match h[0x3F] {
+        0 => format!("{title} ({region})"),
+        rev => format!("{title} ({region}) (Rev {rev})"),
+    }
 }
 
 /// GameCube / Wii game ID (e.g. GZ2E01): at the start of a plain image, and in the copy
@@ -151,13 +243,15 @@ pub fn scan(dir: &Path, catalog: &Value) -> Vec<Found> {
                     by: if by_code { "code" } else { "name" },
                     detail: if detail.is_empty() { stem.clone() } else { detail.clone() },
                     modified: tagged || header_differs || name_differs,
+                    wrong_version: accepts(port, &file) == Some(false),
                 });
             }
         }
     }
-    // Best file first for each port: original copies, then header matches, then shorter paths.
+    // Best file first for each port: accepted releases, original copies, header matches, shorter paths.
     found.sort_by(|a, b| {
-        (a.port.as_str(), a.modified, a.by != "code", a.path.len()).cmp(&(b.port.as_str(), b.modified, b.by != "code", b.path.len()))
+        (a.port.as_str(), a.wrong_version, a.modified, a.by != "code", a.path.len())
+            .cmp(&(b.port.as_str(), b.wrong_version, b.modified, b.by != "code", b.path.len()))
     });
     found
 }
@@ -177,6 +271,21 @@ mod tests {
         assert_eq!(game_folder("Legend of Zelda, The - Majora's Mask"), "legend_of_zelda_majoras_mask");
         assert_eq!(game_folder("Chameleon Twist"), "chameleon_twist");
         assert_eq!(game_folder("Dr. Mario 64"), "dr_mario_64");
+    }
+
+    #[test]
+    fn hashes() {
+        let file = std::env::temp_dir().join("portshelf-hash-test.bin");
+        fs::write(&file, b"abc").unwrap();
+        assert_eq!(file_hash(&file, "sha1").unwrap(), "a9993e364706816aba3e25717850c26c9cd0d89d");
+        assert_eq!(file_hash(&file, "md5").unwrap(), "900150983cd24fb0d6963f7d28e17f72");
+        assert_eq!(file_hash(&file, "sha256").unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert_eq!(file_hash(&file, "xxh3").unwrap(), "78af5f94892f3950");
+        let port = serde_json::json!({ "rom": { "hashes": ["md5:900150983CD24FB0D6963F7D28E17F72"] } });
+        assert_eq!(accepts(&port, &file), Some(true));
+        assert_eq!(accepts(&serde_json::json!({ "rom": { "hashes": ["sha1:00"] } }), &file), Some(false));
+        assert_eq!(accepts(&serde_json::json!({}), &file), None);
+        let _ = fs::remove_file(file);
     }
 
     #[test]
