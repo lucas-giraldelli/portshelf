@@ -212,6 +212,47 @@ fn rescan() -> Result<Library, String> {
     Ok(lib)
 }
 
+/// Programs started from PortShelf must not inherit the AppImage's own libraries and data
+/// paths (they break file managers and can slow down or crash games).
+fn clean_command(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    if std::env::var_os("APPIMAGE").is_some() || std::env::var_os("APPDIR").is_some() {
+        let appdir = std::env::var("APPDIR").unwrap_or_default();
+        for var in [
+            "LD_LIBRARY_PATH", "LD_PRELOAD", "GIO_EXTRA_MODULES", "GIO_MODULE_DIR", "GTK_PATH", "GTK_EXE_PREFIX",
+            "GTK_DATA_PREFIX", "GTK_THEME", "GDK_PIXBUF_MODULE_FILE", "GDK_PIXBUF_MODULEDIR", "GDK_BACKEND",
+            "GSETTINGS_SCHEMA_DIR", "GST_PLUGIN_PATH", "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_SCANNER",
+            "GST_REGISTRY_REUSE_PLUGIN_SCANNER", "PYTHONHOME", "PYTHONPATH", "PERLLIB", "QT_PLUGIN_PATH",
+            "WEBKIT_DISABLE_DMABUF_RENDERER", "APPDIR", "APPIMAGE", "ARGV0", "OWD",
+        ] {
+            cmd.env_remove(var);
+        }
+        // Keep the system's entries of path lists, drop the ones inside the AppImage.
+        for var in ["PATH", "XDG_DATA_DIRS"] {
+            if let Ok(value) = std::env::var(var) {
+                let kept: Vec<&str> = value.split(':').filter(|p| !p.is_empty() && (appdir.is_empty() || !p.starts_with(&appdir))).collect();
+                cmd.env(var, kept.join(":"));
+            }
+        }
+    }
+    cmd
+}
+
+/// Opens a folder in the system's file manager.
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|e| format!("{path}: {e}"))?;
+    let opener = if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" };
+    clean_command(opener)
+        .arg(&path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("{opener}: {e}"))
+}
+
 /// Starts the port and hides the shelf while it runs; the shelf comes back when the
 /// game exits. The game is its own process, so closing the shelf does not stop it.
 #[tauri::command]
@@ -220,7 +261,7 @@ fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
     if let Some(boot) = &install.boot_setting {
         set_config(id.clone(), boot.file.clone(), boot.key.clone(), boot.value.clone())?;
     }
-    let mut cmd = Command::new(&install.exec);
+    let mut cmd = clean_command(&install.exec);
     cmd.args(&install.args);
     if install.game_file_arg {
         let status = rom_status(id.clone(), String::new())?;
@@ -680,7 +721,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, open_folder])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);

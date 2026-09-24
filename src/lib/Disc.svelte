@@ -46,7 +46,7 @@
     mask: radial-gradient(circle, transparent var(--hole), #000 calc(var(--hole) + 0.5%));
   }
   .print img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; }
-  .print span { font: 700 calc(12px * var(--s)) / 1.1 system-ui, sans-serif; color: #222; max-width: 60%; text-align: center; transform: translateY(-28%); }
+  .print span { font: 700 calc(12px * var(--s)) / 1.1 "Outfit", system-ui, sans-serif; color: #222; max-width: 60%; text-align: center; transform: translateY(-28%); }
   .template { position: absolute; inset: 0; width: 100%; height: 100%; }
   .sheen {
     position: absolute; inset: 1%; border-radius: 50%; mix-blend-mode: overlay; opacity: 0.45;

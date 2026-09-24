@@ -10,7 +10,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 ## Features
 
-- Two-level carousel: systems ordered by release year and wrapping around, then the ports on each system
+- Two-level carousel: systems ordered by release year and wrapping around, then the ports on each system; browse with the keyboard, a controller, by dragging with the mouse or with the mouse wheel
 - Keyboard, mouse and controller navigation across the whole app; the key hints at the bottom follow the last input device used, and the pointer hides while a controller is in use
 - Installs ports from their projects' latest GitHub release (zip, tar.gz or AppImage, nested archives included) into `~/.local/share/PortShelf/ports/<port id>/`; only the port is downloaded, the game file always comes from the user
 - Ports start straight into the game, skipping each port's own launcher; the shelf hides while a game runs and returns when it exits
@@ -70,7 +70,7 @@ pnpm app      # development build; also rebuilds when catalog/ changes
 pnpm bundle   # AppImage in src-tauri/target/release/bundle/appimage/
 ```
 
-On Linux the app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for itself, which avoids a Wayland protocol error with NVIDIA drivers. `pnpm bundle` sets `NO_STRIP`, needed on distributions whose libraries are newer than the `strip` bundled with linuxdeploy. The development window is titled `PortShelf (dev)`, so a window manager rule can tell it apart from the installed app.
+Programs started from the AppImage (ports and the file manager) get a clean environment, without the AppImage's bundled library and data paths. On Linux the app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for itself, which avoids a Wayland protocol error with NVIDIA drivers. `pnpm bundle` sets `NO_STRIP`, needed on distributions whose libraries are newer than the `strip` bundled with linuxdeploy. The development window is titled `PortShelf (dev)`, so a window manager rule can tell it apart from the installed app.
 
 On Linux the window has no title bar, since tiling compositors do not draw one and GTK would add its own buttons; Windows and macOS keep their native title bar.
 

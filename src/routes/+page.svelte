@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import Cartridge from "$lib/Cartridge.svelte";
   import Disc from "$lib/Disc.svelte";
   import ConsoleIcon from "$lib/ConsoleIcon.svelte";
@@ -65,7 +65,7 @@
   function romFolderAction() {
     if (!library?.roms_dir) return chooseRomFolder();
     const dir = system ? `${library.roms_dir}/${system.id}` : library.roms_dir;
-    openPath(dir).catch((e) => (error = String(e)));
+    invoke("open_folder", { path: dir }).catch((e) => (error = String(e)));
   }
   let systemRoms = $derived.by(() => {
     if (!system) return null;
@@ -482,6 +482,43 @@
   const prettyKey = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const kindLabel = { recomp: "Static recompilation", decomp: "Decompilation", build: "Builds from your ROM" };
 
+  // Mouse: drag the carousel sideways (or use the wheel) to browse. A drag of about one
+  // item's width moves one step; a drag never counts as a click on the item under it.
+  let drag: { x: number; moved: boolean; step: number } | null = null;
+  let suppressClick = false;
+  function dragStart(e: PointerEvent, step: number) {
+    if (e.button !== 0) return;
+    drag = { x: e.clientX, moved: false, step };
+  }
+  function dragMove(e: PointerEvent) {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) >= drag.step * 0.5) {
+      move(dx < 0 ? 1 : -1);
+      drag.x = e.clientX;
+      drag.moved = true;
+    }
+  }
+  function dragEnd() {
+    if (drag?.moved) {
+      suppressClick = true;
+      setTimeout(() => (suppressClick = false), 0);
+    }
+    drag = null;
+  }
+  let wheelAt = 0;
+  function onWheel(e: WheelEvent) {
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(delta) < 4 || Date.now() - wheelAt < 120) return;
+    wheelAt = Date.now();
+    move(delta > 0 ? 1 : -1);
+  }
+  const clickSlot = (i: number, focused: number, select: (i: number) => void) => {
+    if (suppressClick) return;
+    if (i === focused) confirm();
+    else select(i);
+  };
+
   // Position of item i relative to the focused one.
   const slot = (i: number, focused: number, spacing: number, loop = 0) => {
     let offset = i - focused;
@@ -498,7 +535,7 @@
 
 <main class:pad-mode={inputMode === "pad"} style="--accent: {system?.info.color ?? '#f2b04c'}">
   <header>
-    <h1>PortShelf</h1>
+    <h1 class="brand"><img src="/icon.svg" alt="" width="34" height="34" draggable="false" />PortShelf</h1>
     {#if library?.roms_dir}
       <button class="romchip" onclick={romFolderAction} title="Open {library.roms_dir}/{system?.id ?? ''}">
         {system ? `${system.info.name} ROMs` : "ROMs"}{#if syncing} · syncing…{:else if systemRoms?.installed} · {systemRoms.ready} of {systemRoms.installed} ready{/if}
@@ -515,9 +552,10 @@
   <div class="stage">
   {#if view === "systems"}
    <div class="view" in:fade={{ duration: 220, delay: 120 }} out:scale={{ start: 1.6, opacity: 0, duration: 260, easing: cubicOut }}>
-    <section class="carousel systems" aria-label="Systems">
+    <section class="carousel systems" aria-label="Systems"
+      onpointerdown={(e) => dragStart(e, 520)} onpointermove={dragMove} onpointerup={dragEnd} onpointerleave={dragEnd} onwheel={onWheel}>
       {#each systems as s, i (s.id)}
-        <button class="slot" class:focused={i === systemIndex} style={slot(i, systemIndex, 520, systems.length)} onclick={() => (i === systemIndex ? confirm() : (systemIndex = i))}>
+        <button class="slot" class:focused={i === systemIndex} style={slot(i, systemIndex, 520, systems.length)} onclick={() => clickSlot(i, systemIndex, (j) => (systemIndex = j))}>
           <ConsoleIcon id={s.id} size={460} />
         </button>
       {/each}
@@ -534,9 +572,10 @@
    </div>
   {:else if system}
    <div class="view" out:fade={{ duration: 160 }}>
-    <section class="carousel games" aria-label={system.info.name}>
+    <section class="carousel games" aria-label={system.info.name}
+      onpointerdown={(e) => dragStart(e, 440)} onpointermove={dragMove} onpointerup={dragEnd} onpointerleave={dragEnd} onwheel={onWheel}>
       {#each system.ports as port, i (port.id)}
-        <button class="slot" class:focused={i === gameIndex} style={slot(i, gameIndex, 440)} onclick={() => (i === gameIndex ? confirm() : (gameIndex = i))}
+        <button class="slot" class:focused={i === gameIndex} style={slot(i, gameIndex, 440)} onclick={() => clickSlot(i, gameIndex, (j) => (gameIndex = j))}
           in:fly={{ y: 220, duration: 420, delay: 200 + Math.abs(i - gameIndex) * 70, easing: cubicOut }}>
           {#if system.info.media === "disc"}
             <Disc name={displayName(port)} cover={covers[port.id]} console={port.console} installed={isInstalled(port.id)} size={2.2} />
@@ -730,11 +769,17 @@
   :global(*) { -webkit-user-select: none; user-select: none; }
   :global(input, textarea) { -webkit-user-select: text; user-select: text; }
   :global(img) { -webkit-user-drag: none; }
+  @font-face {
+    font-family: "Outfit";
+    src: url("/fonts/outfit.woff2") format("woff2");
+    font-weight: 300 800;
+    font-display: block;
+  }
   :global(body) {
     margin: 0;
     background: #101014;
     color: #eee8df;
-    font: 15px/1.4 system-ui, sans-serif;
+    font: 15px/1.4 "Outfit", system-ui, sans-serif;
     overflow: hidden;
   }
   main {
@@ -744,7 +789,12 @@
   }
   header { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
   h1 { font-size: 22px; letter-spacing: 0.5px; margin: 4px 0; flex: 1; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+  .brand img { display: block; }
+  .carousel { touch-action: pan-y; cursor: grab; }
+  .carousel:active { cursor: grabbing; }
   button { font: inherit; color: inherit; cursor: pointer; }
+  :global(input) { font-family: inherit; }
   .ghost { background: none; border: 1px solid #4a4540; border-radius: 6px; padding: 5px 12px; }
   .primary.progress {
     color: #1a1510; opacity: 1; cursor: progress;
@@ -786,7 +836,7 @@
   .icon { background: none; border: 0; color: #8f877b; font-size: 18px; padding: 2px 4px; border-radius: 4px; }
   .icon:hover, .icon:focus-visible { color: #f2b04c; }
   .rename {
-    font: 600 26px/1.2 system-ui, sans-serif; text-align: center; color: inherit;
+    font: 600 26px/1.2 "Outfit", system-ui, sans-serif; text-align: center; color: inherit;
     background: #17161b; border: 1px solid #f2b04c; border-radius: 6px; padding: 2px 10px; width: min(520px, 90%);
   }
   .original { font-size: 12px; }
@@ -804,7 +854,7 @@
   kbd {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
-    border: 1px solid #4a4540; border-radius: 4px; font: 12px/1 system-ui, sans-serif; color: #d6cec2;
+    border: 1px solid #4a4540; border-radius: 4px; font: 12px/1 "Outfit", system-ui, sans-serif; color: #d6cec2;
   }
 
   aside {
@@ -846,7 +896,7 @@
   .dialog-hints span { display: inline-flex; align-items: center; gap: 4px; }
   .scrim { position: fixed; inset: 0; background: rgba(8, 8, 10, 0.6); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }
   .search { width: min(640px, 92vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,0.6); overflow: hidden; }
-  .query { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #333; background: transparent; color: inherit; font: 18px system-ui, sans-serif; padding: 16px 18px; outline: none; }
+  .query { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #333; background: transparent; color: inherit; font: 18px "Outfit", system-ui, sans-serif; padding: 16px 18px; outline: none; }
   .results { list-style: none; margin: 0; padding: 6px; max-height: 56vh; overflow-y: auto; }
   .results button { width: 100%; display: flex; gap: 12px; align-items: center; background: none; border: 0; border-radius: 8px; padding: 6px 8px; text-align: left; }
   .results button.on { background: #2c2a33; }

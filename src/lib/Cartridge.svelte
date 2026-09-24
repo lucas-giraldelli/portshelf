@@ -52,6 +52,6 @@
   .art { position: absolute; overflow: hidden; background: #d8d4cc; display: grid; place-items: center; }
   .art .backdrop { position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: cover; filter: blur(8px) brightness(0.75); }
   .art .front { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-  .art span { font: 700 calc(12px * var(--s)) / 1.1 system-ui, sans-serif; color: #222; padding: 6px; text-align: center; }
+  .art span { font: 700 calc(12px * var(--s)) / 1.1 "Outfit", system-ui, sans-serif; color: #222; padding: 6px; text-align: center; }
   .missing { filter: saturate(0.4) brightness(0.8) drop-shadow(0 14px 14px rgba(0, 0, 0, 0.55)); }
 </style>
