@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { openPath, openUrl } from "@tauri-apps/plugin-opener";
   import Cartridge from "$lib/Cartridge.svelte";
   import Disc from "$lib/Disc.svelte";
@@ -60,10 +61,31 @@
       syncing = false;
     }
   }
+  // The ROM folder of the system in view (or the whole folder before one is chosen).
   function romFolderAction() {
-    if (library?.roms_dir) openPath(library.roms_dir).catch((e) => (error = String(e)));
-    else chooseRomFolder();
+    if (!library?.roms_dir) return chooseRomFolder();
+    const dir = system ? `${library.roms_dir}/${system.id}` : library.roms_dir;
+    openPath(dir).catch((e) => (error = String(e)));
   }
+  let systemRoms = $derived.by(() => {
+    if (!system) return null;
+    const installed = system.ports.filter((p) => isInstalled(p.id));
+    return { ready: installed.filter((p) => romReady(p.id)).length, installed: installed.length };
+  });
+
+  // Ports and game files are picked up automatically: on start and whenever the window
+  // comes back into focus (after dropping a file in the ROM folder, for example).
+  let lastRefresh = 0;
+  async function refreshAll() {
+    if (Date.now() - lastRefresh < 3000 || !catalog) return;
+    lastRefresh = Date.now();
+    library = await invoke("rescan");
+    await syncRoms();
+    await Promise.all(catalog.ports.filter((p) => isInstalled(p.id)).map(refreshRom));
+  }
+  getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+    if (focused) refreshAll();
+  });
 
   // The footer shows the controls of whatever was used last: controller, or keyboard/mouse.
   let inputMode = $state<"keys" | "pad">("keys");
@@ -299,7 +321,8 @@
       library = await invoke<Library>("get_library");
       await Promise.all(catalog.ports.map((port) => loadCover(port.id)));
       scrapeMissing();
-      syncRoms();
+      await syncRoms();
+      await Promise.all(catalog.ports.filter((p) => isInstalled(p.id)).map(refreshRom));
     } catch (e) {
       error = String(e);
     }
@@ -478,15 +501,14 @@
     <h1>PortShelf</h1>
     {#if library?.roms_dir}
       <span class="romchip">
-        <button class="ghost" onclick={romFolderAction} title="Open {library.roms_dir}">
-          ROMs · {syncing ? "syncing…" : romSummary ? `${romSummary.ready} of ${romSummary.installed} ready` : "folder"}
+        <button class="ghost" onclick={romFolderAction} title="Open {library.roms_dir}/{system?.id ?? ''}">
+          {system ? `${system.info.name} ROMs` : "ROMs"}{#if syncing} · syncing…{:else if systemRoms?.installed} · {systemRoms.ready} of {systemRoms.installed} ready{/if}
         </button>
         <button class="link" onclick={chooseRomFolder}>Change</button>
       </span>
     {:else if library}
       <button class="ghost" onclick={chooseRomFolder}>Choose ROM folder</button>
     {/if}
-    <button class="ghost" onclick={async () => { library = await invoke("rescan"); await syncRoms(); }}>Rescan</button>
   </header>
 
   {#if error}

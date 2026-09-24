@@ -15,7 +15,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - Installs ports from their projects' latest GitHub release (zip, tar.gz or AppImage, nested archives included) into `~/.local/share/PortShelf/ports/<port id>/`; only the port is downloaded, the game file always comes from the user
 - Ports start straight into the game, skipping each port's own launcher; the shelf hides while a game runs and returns when it exits
 - A game file is required before a port can start; it is set up the way each port expects (a big-endian copy for recompilation ports, the file path for Dusklight, a link next to the executable for Harbour Masters ports)
-- ROM folder: chosen once, it gets a folder per game (`<system>/<game>/`, for example `n64/chameleon_twist/`). A file placed in a game's folder is used for that game; files anywhere else in the ROM folder are identified by the game code stored in them (N64 cartridge header; GameCube disc header, also inside RVZ and WIA images) or by their No-Intro or Redump name, and copies that look modified are skipped, since ports need the original game. The folder is synced on start and on Rescan; files for ports not installed yet are set up when the port is installed
+- ROM folder: chosen once, it gets a folder per game (`<system>/<game>/`, for example `n64/chameleon_twist/`). A file placed in a game's folder is used for that game; files anywhere else in the ROM folder are identified by the game code stored in them (N64 cartridge header; GameCube disc header, also inside RVZ and WIA images) or by their No-Intro or Redump name, and copies that look modified are skipped, since ports need the original game. The header shows how many installed ports of the system in view have their game file and opens that system's folder. PortShelf picks up new ports and game files on start and whenever its window comes back into focus; files for ports not installed yet are set up when the port is installed
 - Settings editor for ports that store their options as JSON (the RecompFrontend family)
 - Cover art found automatically, with manual cover choice, renaming and online search per game
 - Search across every system
@@ -50,7 +50,7 @@ Controllers are read natively with gilrs, so they work where the webview has no 
 | Cover index cache | `~/.cache/portshelf/` |
 | Game files | the ROM folder you choose, organised as `<system>/<game>/` |
 
-The library is created on first run by scanning the usual install locations; Rescan refreshes the entries it finds and keeps covers chosen by hand.
+The library is created on first run by scanning the usual install locations, and refreshed whenever the window comes back into focus; covers chosen by hand are kept.
 
 Cover art comes from [libretro-thumbnails](https://github.com/libretro-thumbnails), matched by the No-Intro or Redump title recorded in the catalog, preferring the USA release. A cover chosen by hand is never replaced by scraping.
 
