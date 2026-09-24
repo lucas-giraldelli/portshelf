@@ -18,6 +18,8 @@ export interface Port {
   game_arg?: string;
   /** No-Intro / Redump title, used to find cover art. */
   title?: string;
+  /** How PortShelf installs it, per operating system. */
+  install?: Partial<Record<"linux" | "windows" | "macos", { asset: string[]; exec?: string }>>;
   /** Cartridge colour when it is not the console default (DK64 yellow, Zelda gold). */
   shell?: string;
 }

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 mod gamepad;
+mod install;
 mod scrape;
 
 const CATALOG: &str = include_str!("../../catalog/ports.json");
@@ -33,6 +34,9 @@ struct Install {
     /// Where the port expects its game data; the shelf only starts a port once this is set up.
     #[serde(default)]
     rom: Option<RomSpec>,
+    /// Release tag, for ports installed by PortShelf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    version: Option<String>,
 }
 
 /// How each kind of port stores the game it needs.
@@ -145,6 +149,7 @@ fn scan() -> Library {
                         key: "backend.skipPreLaunchUI".into(),
                         value: Value::Bool(true),
                     }),
+                    version: None,
                     rom: Some(match *id {
                         "tp" => RomSpec::ConfigKey { file: "config".into(), key: "backend.isoPath".into() },
                         "oot-soh" => RomSpec::Extracted { archive: "oot.o2r".into() },
@@ -354,6 +359,104 @@ fn quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Catalog install section of a port.
+#[derive(Deserialize, Default)]
+struct CatalogInstall {
+    linux: Option<install::Rule>,
+    windows: Option<install::Rule>,
+    macos: Option<install::Rule>,
+    #[serde(default)]
+    args: Vec<String>,
+    config_dir: Option<String>,
+    /// Harbour Masters ports keep settings next to the program.
+    #[serde(default)]
+    config_in_install: bool,
+    rom: Option<RomSpec>,
+    boot_setting: Option<BootSetting>,
+}
+
+fn catalog_port(id: &str) -> Result<Value, String> {
+    let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
+    catalog["ports"]
+        .as_array()
+        .and_then(|ports| ports.iter().find(|p| p["id"] == id))
+        .cloned()
+        .ok_or_else(|| format!("{id} is not in the catalog"))
+}
+
+fn ports_dir() -> PathBuf {
+    dirs::data_local_dir().unwrap_or_else(|| home().join(".local/share")).join("PortShelf").join("ports")
+}
+
+#[derive(Serialize, Clone)]
+struct InstallProgress {
+    id: String,
+    stage: &'static str,
+    done: u64,
+    total: Option<u64>,
+}
+
+/// The operating system, for knowing which catalog install rule applies.
+#[tauri::command]
+fn platform() -> &'static str {
+    std::env::consts::OS
+}
+
+/// Downloads the port's latest release for this system and adds it to the library.
+#[tauri::command]
+async fn install_port(app: tauri::AppHandle, id: String) -> Result<Library, String> {
+    use tauri::Emitter;
+    let port = catalog_port(&id)?;
+    let spec: CatalogInstall = serde_json::from_value(port["install"].clone()).unwrap_or_default();
+    let rule = match std::env::consts::OS {
+        "linux" => spec.linux.clone(),
+        "windows" => spec.windows.clone(),
+        "macos" => spec.macos.clone(),
+        _ => None,
+    }
+    .ok_or("PortShelf does not know how to install this port on this system yet")?;
+    let repo = port["repo"].as_str().unwrap_or_default().to_string();
+    let dest = ports_dir().join(&id);
+    let work = cache_dir().join(format!("install-{id}"));
+    let (tag, exec) = {
+        let (app, id, dest) = (app.clone(), id.clone(), dest.clone());
+        tauri::async_runtime::spawn_blocking(move || {
+            install::install(&repo, &rule, &dest, &work, |p| {
+                let (stage, done, total) = match p {
+                    install::Progress::Downloading { done, total } => ("downloading", done, total),
+                    install::Progress::Unpacking => ("unpacking", 0, None),
+                    install::Progress::Done => ("done", 0, None),
+                };
+                let _ = app.emit("install-progress", InstallProgress { id: id.clone(), stage, done, total });
+            })
+        })
+        .await
+        .map_err(|e| e.to_string())??
+    };
+    let cwd = exec.parent().unwrap_or(&dest).to_path_buf();
+    let config_dir = if spec.config_in_install {
+        Some(cwd.to_string_lossy().into_owned())
+    } else {
+        spec.config_dir.as_deref().map(|d| expand(d).to_string_lossy().into_owned())
+    };
+    let mut lib = load_library()?;
+    lib.installed.insert(
+        id,
+        Install {
+            exec: exec.to_string_lossy().into_owned(),
+            args: spec.args,
+            cwd: Some(cwd.to_string_lossy().into_owned()),
+            config_dir,
+            cover: None,
+            boot_setting: spec.boot_setting,
+            rom: spec.rom,
+            version: Some(tag),
+        },
+    );
+    save_library(&lib)?;
+    Ok(lib)
+}
+
 /// Hides the pointer while a controller is in use (the CSS cursor only updates on the next mouse move).
 #[tauri::command]
 fn set_cursor_visible(window: tauri::WebviewWindow, visible: bool) -> Result<(), String> {
@@ -473,7 +576,7 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);

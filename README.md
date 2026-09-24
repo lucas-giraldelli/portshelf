@@ -12,6 +12,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 - Two-level carousel: systems ordered by release year and wrapping around, then the ports on each system
 - Keyboard, mouse and controller navigation across the whole app; the key hints at the bottom follow the last input device used, and the pointer hides while a controller is in use
+- Installs ports from their projects' latest GitHub release (zip, tar.gz or AppImage, nested archives included) into `~/.local/share/PortShelf/ports/<port id>/`; only the port is downloaded, the game file always comes from the user
 - Ports start straight into the game, skipping each port's own launcher; the shelf hides while a game runs and returns when it exits
 - A game file is required before a port can start; it is set up the way each port expects (a big-endian copy for recompilation ports, the file path for Dusklight, a link next to the executable for Harbour Masters ports)
 - Settings editor for ports that store their options as JSON (the RecompFrontend family)
@@ -41,6 +42,7 @@ Controllers are read natively with gilrs, so they work where the webview has no 
 
 | What | Location on Linux |
 |---|---|
+| Ports installed by PortShelf | `~/.local/share/PortShelf/ports/<port id>/` (Windows: `%LOCALAPPDATA%\PortShelf\ports`, macOS: `~/Library/Application Support/PortShelf/ports`) |
 | Library (installed ports and how to start them) | `~/.config/portshelf/library.json` |
 | Cover art | `~/.config/portshelf/covers/<port id>.png` (replaced covers are kept in `covers/replaced/`) |
 | Cover index cache | `~/.cache/portshelf/` |
@@ -52,7 +54,7 @@ Cover art comes from [libretro-thumbnails](https://github.com/libretro-thumbnail
 
 ## Catalog
 
-`catalog/ports.json` lists the known ports: system, kind (recompilation, decompilation or builder), project page, No-Intro or Redump title, and an optional cartridge colour. Each system entry has its name, release year, media type and accent colour.
+`catalog/ports.json` lists the known ports: system, kind (recompilation, decompilation or builder), project page, No-Intro or Redump title, an optional cartridge colour, and an optional `install` section. The install section names, per operating system, the words that identify the release asset and the program to start, plus launch arguments, the settings folder and how the port expects its game file. `cargo run --example install -- <port id> <folder>` (in `src-tauri`) tests a rule without the interface. Each system entry has its name, release year, media type and accent colour.
 
 The list was put together from [PCGamingWiki's list of unofficial ports](https://www.pcgamingwiki.com/wiki/List_of_unofficial_ports) and [awesome-unofficial-pc-ports](https://github.com/Sebastrion/awesome-unofficial-pc-ports).
 

@@ -68,6 +68,38 @@
   let configTab = $state("");
 
   const isInstalled = (id: string) => !!library?.installed[id];
+
+  // Installing ports from their GitHub releases (the game file still comes from the user).
+  let os = $state("linux");
+  invoke<string>("platform").then((p) => (os = p));
+  const canInstall = (port: Port) => !!port.install?.[os as "linux" | "windows" | "macos"];
+  let installing = $state<Record<string, { stage: string; done: number; total: number | null }>>({});
+  listen<{ id: string; stage: string; done: number; total: number | null }>("install-progress", (e) => {
+    installing[e.payload.id] = e.payload;
+  });
+  const mb = (n: number) => (n / 1048576).toFixed(0);
+  const installLabel = (id: string) => {
+    const p = installing[id];
+    if (!p) return "";
+    if (p.stage === "downloading") return p.total ? `Downloading ${mb(p.done)} / ${mb(p.total)} MB` : `Downloading ${mb(p.done)} MB`;
+    return p.stage === "unpacking" ? "Unpacking…" : "Finishing…";
+  };
+  async function installPort(port: Port) {
+    if (installing[port.id]) return;
+    installing[port.id] = { stage: "downloading", done: 0, total: null };
+    try {
+      library = await invoke("install_port", { id: port.id });
+      delete installing[port.id];
+      // Installed ports sort first; keep the focus on the one just installed.
+      const at = systems[systemIndex]?.ports.findIndex((p) => p.id === port.id) ?? -1;
+      if (at >= 0) gameIndex = at;
+      await refreshRom(port);
+      flash(`${displayName(port)} installed${roms[port.id]?.ready ? "" : ". Select the game file to play"}`);
+    } catch (e) {
+      delete installing[port.id];
+      error = String(e);
+    }
+  }
   const displayName = (port: Port) => library?.overrides?.[port.id]?.name ?? port.name;
 
   // Images are decoded before they are shown; otherwise WebKit decodes each one the first
@@ -219,7 +251,7 @@
   });
   let system = $derived(systems[systemIndex]);
   let game = $derived(system?.ports[gameIndex]);
-  let primaryLabel = $derived(view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : game && !isInstalled(game.id) ? "Get it" : "Play");
+  let primaryLabel = $derived(view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : game && !isInstalled(game.id) ? (canInstall(game) ? "Install" : "Get it") : "Play");
 
   async function load() {
     try {
@@ -247,7 +279,10 @@
       view = "games";
       gameIndex = 0;
     } else if (game) {
-      if (!isInstalled(game.id)) openUrl(game.repo);
+      if (!isInstalled(game.id)) {
+        if (canInstall(game)) await installPort(game);
+        else openUrl(game.repo);
+      }
       else if (romReady(game.id)) await play(game);
       else await selectRom(game);
     }
@@ -470,6 +505,10 @@
           {:else if isInstalled(game.id)}
             <button class="primary" onclick={() => selectRom(game!)}>Select game file</button>
             <button class="ghost" onclick={openSettings}>Settings</button>
+          {:else if installing[game.id]}
+            <button class="primary progress" disabled style="--p:{installing[game.id].total ? (installing[game.id].done / installing[game.id].total!) * 100 : 0}%">{installLabel(game.id)}</button>
+          {:else if canInstall(game)}
+            <button class="primary" onclick={() => installPort(game!)}>Install</button>
           {:else}
             <button class="primary" onclick={() => openUrl(game!.repo)}>Get it</button>
           {/if}
@@ -639,6 +678,10 @@
   h1 { font-size: 22px; letter-spacing: 0.5px; margin: 4px 0; flex: 1; }
   button { font: inherit; color: inherit; cursor: pointer; }
   .ghost { background: none; border: 1px solid #4a4540; border-radius: 6px; padding: 5px 12px; }
+  .primary.progress {
+    color: #1a1510; opacity: 1; cursor: progress;
+    background: linear-gradient(90deg, #f2b04c var(--p), #7d6440 var(--p));
+  }
   .primary { background: #f2b04c; color: #1a1510; border: 0; border-radius: 8px; padding: 9px 28px; font-weight: 700; }
   .error { background: #5c1e16; padding: 8px 12px; border-radius: 6px; }
 
