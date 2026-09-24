@@ -23,6 +23,32 @@ struct Install {
     config_dir: Option<String>,
     #[serde(default)]
     cover: Option<String>,
+    /// A setting written to the port's config right before launching it, used
+    /// to skip its own launcher (for ports without a command line flag for it).
+    #[serde(default)]
+    boot_setting: Option<BootSetting>,
+    /// Where the port expects its game data; the shelf only starts a port once this is set up.
+    #[serde(default)]
+    rom: Option<RomSpec>,
+}
+
+/// How each kind of port stores the game it needs.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum RomSpec {
+    /// RecompFrontend ports: a big-endian copy named <GAME_ID>.z64 in the config directory.
+    Stored { file: String },
+    /// A path saved in one of the port's JSON settings files (Dusklight's backend.isoPath).
+    ConfigKey { file: String, key: String },
+    /// Harbour Masters ports: they turn a ROM found next to the executable into an .o2r archive.
+    Extracted { archive: String },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct BootSetting {
+    file: String,
+    key: String,
+    value: Value,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -53,12 +79,13 @@ fn library_path() -> PathBuf {
 /// First run: look for ports in the places they are usually installed.
 fn scan() -> Library {
     let mut installed = BTreeMap::new();
+    // Recomp ports skip their launcher with --game <id>; Dusklight with a config flag.
     let candidates: &[(&str, &str, &[&str], Option<&str>)] = &[
-        ("dk64", "~/Applications/DK64Recompiled/DK64Recompiled", &[], Some("~/.config/DK64Recompiled")),
-        ("mt64", "/mnt/main/Roms/mariotennis64recomp/run/play.sh", &[], Some("/mnt/main/Roms/mariotennis64recomp/run")),
+        ("dk64", "~/Applications/DK64Recompiled/DK64Recompiled", &["--game", "dk64"], Some("~/.config/DK64Recompiled")),
+        ("mt64", "/mnt/main/Roms/mariotennis64recomp/run/play.sh", &["--game", "mt64"], Some("/mnt/main/Roms/mariotennis64recomp/run")),
         ("tp", "~/Applications/Dusklight.AppImage", &[], Some("~/.local/share/TwilitRealm/Dusklight")),
-        ("bm64", "~/Applications/BM64Recompiled/BM64Recompiled", &[], Some("~/.config/BM64Recompiled")),
-        // Harbour Masters ports keep their settings next to the AppImage.
+        ("bm64", "~/Applications/BM64Recompiled/BM64Recompiled", &["--game", "bm64"], Some("~/.config/BM64Recompiled")),
+        // Harbour Masters ports boot straight into the game and keep their settings next to the AppImage.
         ("oot-soh", "~/Applications/SoH/soh.appimage", &[], Some("~/Applications/SoH")),
         ("mm-2s2h", "~/Applications/2Ship/2ship.appimage", &[], Some("~/Applications/2Ship")),
     ];
@@ -73,6 +100,17 @@ fn scan() -> Library {
                     cwd: exec_path.parent().map(|p| p.to_string_lossy().into()),
                     config_dir: config_dir.map(|d| expand(d).to_string_lossy().into()),
                     cover: None,
+                    boot_setting: (*id == "tp").then(|| BootSetting {
+                        file: "config".into(),
+                        key: "backend.skipPreLaunchUI".into(),
+                        value: Value::Bool(true),
+                    }),
+                    rom: Some(match *id {
+                        "tp" => RomSpec::ConfigKey { file: "config".into(), key: "backend.isoPath".into() },
+                        "oot-soh" => RomSpec::Extracted { archive: "oot.o2r".into() },
+                        "mm-2s2h" => RomSpec::Extracted { archive: "mm.o2r".into() },
+                        other => RomSpec::Stored { file: format!("{}.z64", other.to_uppercase()) },
+                    }),
                 },
             );
         }
@@ -112,9 +150,14 @@ fn get_library() -> Result<Library, String> {
 
 #[tauri::command]
 fn rescan() -> Result<Library, String> {
+    // Scanned entries are refreshed (launch flags, game file layout), but a cover the
+    // user picked is kept; ports added by hand are left alone.
     let mut lib = load_library()?;
-    for (id, install) in scan().installed {
-        lib.installed.entry(id).or_insert(install);
+    for (id, mut install) in scan().installed {
+        if let Some(old) = lib.installed.get(&id) {
+            install.cover = old.cover.clone();
+        }
+        lib.installed.insert(id, install);
     }
     save_library(&lib)?;
     Ok(lib)
@@ -124,6 +167,9 @@ fn rescan() -> Result<Library, String> {
 #[tauri::command]
 fn launch(id: String) -> Result<(), String> {
     let install = installed(&id)?;
+    if let Some(boot) = &install.boot_setting {
+        set_config(id.clone(), boot.file.clone(), boot.key.clone(), boot.value.clone())?;
+    }
     let mut cmd = Command::new(&install.exec);
     cmd.args(&install.args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     if let Some(cwd) = &install.cwd {
@@ -165,8 +211,8 @@ fn get_config(id: String) -> Result<BTreeMap<String, Value>, String> {
         let path = entry.map_err(|e| e.to_string())?.path();
         let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
-        // controls.json is a large binding table; it gets its own editor later.
-        if !is_json || stem == "controls" {
+        // Binding tables and bookkeeping files are not settings.
+        if !is_json || matches!(stem.as_str(), "controls" | "achievements" | "mods") {
             continue;
         }
         if let Ok(value) = serde_json::from_str::<Value>(&fs::read_to_string(&path).unwrap_or_default()) {
@@ -194,11 +240,110 @@ fn set_config(id: String, file: String, key: String, value: Value) -> Result<(),
     fs::write(&path, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize)]
+struct RomStatus {
+    /// True when the port has what it needs to boot.
+    ready: bool,
+    /// The game file in use, when known.
+    path: Option<String>,
+    /// Folder to open the file picker in.
+    browse_dir: String,
+}
+
+fn config_file(install: &Install, file: &str) -> Option<PathBuf> {
+    install.config_dir.as_ref().map(|d| Path::new(d).join(format!("{file}.json")))
+}
+
+#[tauri::command]
+fn rom_status(id: String, console: String) -> Result<RomStatus, String> {
+    let lib = load_library()?;
+    let install = lib.installed.get(&id).ok_or_else(|| format!("{id} is not installed"))?;
+    let browse_dir = Path::new(&lib.roms_dir).join(&console).to_string_lossy().into();
+    let (ready, path) = match &install.rom {
+        None => (true, None),
+        Some(RomSpec::Stored { file }) => {
+            let p = Path::new(install.config_dir.as_deref().unwrap_or_default()).join(file);
+            (p.exists(), p.exists().then(|| p.to_string_lossy().into()))
+        }
+        Some(RomSpec::ConfigKey { file, key }) => {
+            let value = config_file(install, file)
+                .and_then(|p| fs::read_to_string(p).ok())
+                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                .and_then(|v| v.get(key).and_then(|v| v.as_str()).map(String::from));
+            (value.as_deref().is_some_and(|p| Path::new(p).exists()), value)
+        }
+        Some(RomSpec::Extracted { archive }) => {
+            let dir = Path::new(install.cwd.as_deref().unwrap_or_default());
+            let done = dir.join(archive).exists();
+            let rom = fs::read_dir(dir).ok().and_then(|entries| {
+                entries.flatten().map(|e| e.path()).find(|p| {
+                    matches!(p.extension().and_then(|e| e.to_str()), Some("z64" | "n64" | "v64"))
+                })
+            });
+            (done || rom.is_some(), rom.map(|p| p.to_string_lossy().into()))
+        }
+    };
+    Ok(RomStatus { ready, path, browse_dir })
+}
+
+/// N64 ROMs come in three byte orders; RecompFrontend stores the big-endian (.z64) one.
+fn to_z64(mut data: Vec<u8>) -> Result<Vec<u8>, String> {
+    match data.get(..4) {
+        Some([0x80, 0x37, 0x12, 0x40]) => {}
+        Some([0x37, 0x80, 0x40, 0x12]) => data.chunks_exact_mut(2).for_each(|c| c.swap(0, 1)),
+        Some([0x40, 0x12, 0x37, 0x80]) => data.chunks_exact_mut(4).for_each(|c| c.reverse()),
+        _ => return Err("this file is not an N64 ROM".into()),
+    }
+    Ok(data)
+}
+
+/// Sets up the chosen game file the way the port's own launcher would.
+#[tauri::command]
+fn select_rom(id: String, path: String) -> Result<(), String> {
+    let install = installed(&id)?;
+    match install.rom.ok_or("this port does not need a game file")? {
+        RomSpec::Stored { file } => {
+            let dir = install.config_dir.ok_or("no config directory for this port")?;
+            let data = to_z64(fs::read(&path).map_err(|e| format!("{path}: {e}"))?)?;
+            fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            fs::write(Path::new(&dir).join(file), data).map_err(|e| e.to_string())
+        }
+        RomSpec::ConfigKey { file, key } => {
+            let dir = install.config_dir.ok_or("no config directory for this port")?;
+            let target = Path::new(&dir).join(format!("{file}.json"));
+            if !target.exists() {
+                fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                fs::write(&target, "{}").map_err(|e| e.to_string())?;
+            }
+            set_config(id, file, key, Value::String(path))
+        }
+        RomSpec::Extracted { .. } => {
+            // The port extracts it on its next start; a link keeps the ROM in the library.
+            let dir = install.cwd.ok_or("no install directory for this port")?;
+            let name = Path::new(&path).file_name().ok_or("invalid file")?;
+            let link = Path::new(&dir).join(name);
+            let _ = fs::remove_file(&link);
+            std::os::unix::fs::symlink(&path, &link).map_err(|e| e.to_string())
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config])
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // Tiling compositors draw no title bar, so GTK adds its own buttons; drop them on
+            // Linux. Windows and macOS keep their native title bar.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = tauri::Manager::get_webview_window(app, "main") {
+                window.set_decorations(false)?;
+            }
+            let _ = app;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

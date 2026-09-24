@@ -1,14 +1,14 @@
 {
   "version": 1,
   "consoles": {
-    "n64":  { "name": "Nintendo 64",  "media": "cartridge", "color": "#3b3b3b" },
-    "gc":   { "name": "GameCube",     "media": "disc",      "color": "#5a4fcf" },
-    "snes": { "name": "Super Nintendo", "media": "cartridge", "color": "#b8b8c0" },
-    "gba":  { "name": "Game Boy Advance", "media": "cartridge", "color": "#4b3c8f" },
-    "ps1":  { "name": "PlayStation",  "media": "disc",      "color": "#9a9a9a" },
-    "ps2":  { "name": "PlayStation 2", "media": "disc",     "color": "#1b2a6b" },
-    "md":   { "name": "Mega Drive",   "media": "cartridge", "color": "#1a1a1a" },
-    "x360": { "name": "Xbox 360",     "media": "disc",      "color": "#3a8a2a" }
+    "n64":  { "name": "Nintendo 64",  "media": "cartridge", "color": "#3b3b3b", "year": 1996 },
+    "gc":   { "name": "GameCube",     "media": "disc",      "color": "#5a4fcf", "year": 2001 },
+    "snes": { "name": "Super Nintendo", "media": "cartridge", "color": "#b8b8c0", "year": 1990 },
+    "gba":  { "name": "Game Boy Advance", "media": "cartridge", "color": "#4b3c8f", "year": 2001 },
+    "ps1":  { "name": "PlayStation",  "media": "disc",      "color": "#9a9a9a", "year": 1994 },
+    "ps2":  { "name": "PlayStation 2", "media": "disc",     "color": "#1b2a6b", "year": 2000 },
+    "md":   { "name": "Mega Drive",   "media": "cartridge", "color": "#1a1a1a", "year": 1988 },
+    "x360": { "name": "Xbox 360",     "media": "disc",      "color": "#3a8a2a", "year": 2005 }
   },
   "ports": [
     { "id": "dk64",       "name": "Donkey Kong 64",           "console": "n64", "kind": "recomp", "repo": "https://github.com/Rainchus/Donkey-Kong-64-Recompiled", "config": { "format": "recompfrontend", "dir": "~/.config/DK64Recompiled" }, "game_arg": "dk64" },

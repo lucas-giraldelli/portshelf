@@ -5,6 +5,7 @@ export interface Console {
   name: string;
   media: Media;
   color: string;
+  year: number;
 }
 
 export interface Port {
@@ -34,4 +35,10 @@ export interface Install {
 export interface Library {
   roms_dir: string;
   installed: Record<string, Install>;
+}
+
+export interface RomStatus {
+  ready: boolean;
+  path: string | null;
+  browse_dir: string;
 }

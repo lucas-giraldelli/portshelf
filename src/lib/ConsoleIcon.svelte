@@ -1,8 +1,13 @@
 <script lang="ts">
-  // Stylised console hardware, one SVG per system, drawn at a 200x160 viewBox.
+  // Console hardware: a photo when one is bundled (static/consoles, see CREDITS.md),
+  // otherwise a stylised SVG drawn at a 200x160 viewBox.
   let { id, size = 200 }: { id: string; size?: number } = $props();
+  const photos = new Set(["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360"]);
 </script>
 
+{#if photos.has(id)}
+  <img class="photo" src="/consoles/{id}.png" alt="" style="max-width: {size}px; max-height: {size * 0.8}px" draggable="false" />
+{:else}
 <svg viewBox="0 0 200 160" width={size} height={size * 0.8} aria-hidden="true">
   {#if id === "gc"}
     <!-- GameCube: indigo cube with the handle at the back and the disc lid on top -->
@@ -76,3 +81,8 @@
     <rect x="30" y="40" width="140" height="90" rx="12" fill="#555" />
   {/if}
 </svg>
+{/if}
+
+<style>
+  .photo { display: block; object-fit: contain; filter: drop-shadow(0 18px 18px rgba(0, 0, 0, 0.55)); }
+</style>
