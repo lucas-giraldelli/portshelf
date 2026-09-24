@@ -7,7 +7,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-const USER_AGENT: &str = "portshelf (https://github.com/lucas-giraldelli/portshelf)";
+const USER_AGENT: &str = "PortShelf (https://github.com/lucas-giraldelli/portshelf)";
 
 fn repository(console: &str) -> Option<&'static str> {
     Some(match console {

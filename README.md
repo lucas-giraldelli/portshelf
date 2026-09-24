@@ -1,4 +1,4 @@
-# portshelf
+# PortShelf
 
 A shelf for the native PC ports of console games (N64: Recompiled ports, Harbour Masters ports, decompilations). Each system is a console you open; inside, every port is a cartridge or a disc you can start, configure and look up.
 
@@ -26,6 +26,11 @@ Covers are found automatically on [libretro-thumbnails](https://github.com/libre
 | Settings | S | Y |
 | Rename | R | |
 | Every known port / installed only | Tab | Select |
+| Known ports of the system | K | X |
+| Search every system | Ctrl+F | Start |
+| Previous / next system (in a system) | | LB / RB |
+
+Controllers are read natively (gilrs), so they work even where the webview has no Gamepad API; the key hints at the bottom follow whichever you used last.
 
 ## Development
 

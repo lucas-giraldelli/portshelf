@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Cartridge from "$lib/Cartridge.svelte";
   import Disc from "$lib/Disc.svelte";
@@ -23,7 +24,42 @@
   let settingsOpen = $state(false);
   // Every port the catalog knows for one system, with links to the projects.
   let knownFor = $state<string | null>(null);
-  const panelOpen = () => settingsOpen || knownFor !== null;
+  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen;
+
+  // The footer shows the controls of whatever was used last: controller, or keyboard/mouse.
+  let inputMode = $state<"keys" | "pad">("keys");
+
+  // Ctrl+F: find a game in every system and jump to it on its shelf.
+  let searchOpen = $state(false);
+  let query = $state("");
+  let searchIndex = $state(0);
+  const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  let results = $derived.by(() => {
+    if (!catalog) return [];
+    const words = fold(query).split(/\s+/).filter(Boolean);
+    return catalog.ports
+      .filter((p) => {
+        const haystack = fold([displayName(p), p.name, p.title ?? "", catalog!.consoles[p.console].name].join(" "));
+        return words.every((w) => haystack.includes(w));
+      })
+      .sort((a, b) => Number(isInstalled(b.id)) - Number(isInstalled(a.id)) || displayName(a).localeCompare(displayName(b)));
+  });
+  function openSearch() {
+    if (settingsOpen || knownFor || editingName) return;
+    query = "";
+    searchIndex = 0;
+    searchOpen = true;
+  }
+  function onSearchKey(e: KeyboardEvent) {
+    if (e.key === "ArrowDown") { e.preventDefault(); searchIndex = Math.min(searchIndex + 1, results.length - 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); searchIndex = Math.max(searchIndex - 1, 0); }
+    else if (e.key === "Enter" && results[searchIndex]) { e.preventDefault(); pickResult(results[searchIndex]); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); searchOpen = false; }
+  }
+  function pickResult(port: Port) {
+    searchOpen = false;
+    showOnShelf(port);
+  }
   let config = $state<Record<string, Record<string, unknown>> | null>(null);
   let configTab = $state("");
 
@@ -166,6 +202,7 @@
   });
   let system = $derived(systems[systemIndex]);
   let game = $derived(system?.ports[gameIndex]);
+  let primaryLabel = $derived(view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : game && !isInstalled(game.id) ? "Get it" : "Play");
 
   async function load() {
     try {
@@ -244,7 +281,13 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.target instanceof HTMLInputElement || editingName) return;
+    inputMode = "keys";
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      openSearch();
+      return;
+    }
+    if (e.target instanceof HTMLInputElement || editingName || searchOpen) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
       Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, Tab: toggleAll, k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
@@ -256,28 +299,43 @@
     }
   }
 
-  // Gamepad: D-pad / left stick to move, A to confirm, B to go back, Y for settings.
-  let lastButtons: boolean[] = [];
-  let lastAxis = 0;
-  function pollGamepad() {
-    const pad = navigator.getGamepads?.().find((p) => p);
-    if (pad) {
-      const pressed = pad.buttons.map((b) => b.pressed);
-      const edge = (i: number) => pressed[i] && !lastButtons[i];
-      if (edge(0)) confirm();
-      if (edge(1)) back();
-      if (edge(3)) openSettings();
-      if (edge(8)) toggleAll();
-      if (edge(14)) move(-1);
-      if (edge(15)) move(1);
-      const axis = Math.abs(pad.axes[0]) > 0.6 ? Math.sign(pad.axes[0]) : 0;
-      if (axis !== 0 && axis !== lastAxis) move(axis);
-      lastAxis = axis;
-      lastButtons = pressed;
+  // Controller, read by the backend and forwarded as "pad" events:
+  // D-pad / stick browse, A confirms, B goes back, Y settings, Select every known port,
+  // Start opens search, LB / RB switch system while looking at games.
+  function onPad(action: string) {
+    inputMode = "pad";
+    if (searchOpen) {
+      if (action === "down") searchIndex = Math.min(searchIndex + 1, results.length - 1);
+      else if (action === "up") searchIndex = Math.max(searchIndex - 1, 0);
+      else if (action === "a" && results[searchIndex]) pickResult(results[searchIndex]);
+      else if (action === "b" || action === "start") searchOpen = false;
+      return;
     }
-    requestAnimationFrame(pollGamepad);
+    if (settingsOpen && config) {
+      const tabs = Object.keys(config);
+      const i = tabs.indexOf(configTab);
+      if (action === "left" || action === "lb") configTab = tabs[Math.max(0, i - 1)];
+      else if (action === "right" || action === "rb") configTab = tabs[Math.min(tabs.length - 1, i + 1)];
+      else if (action === "b" || action === "y") settingsOpen = false;
+      return;
+    }
+    if (knownFor) {
+      if (action === "b") knownFor = null;
+      return;
+    }
+    const actions: Record<string, () => void> = {
+      left: () => move(-1), right: () => move(1), a: confirm, b: back, y: openSettings,
+      select: toggleAll, start: openSearch, x: () => system && (knownFor = system.id),
+      lb: () => switchSystem(-1), rb: () => switchSystem(1),
+    };
+    actions[action]?.();
   }
-  requestAnimationFrame(pollGamepad);
+  function switchSystem(delta: number) {
+    if (view !== "games") return;
+    systemIndex = wrap(systemIndex + delta, systems.length);
+    gameIndex = 0;
+  }
+  listen<string>("pad", (e) => onPad(e.payload));
 
   const prettyKey = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const kindLabel = { recomp: "Static recompilation", decomp: "Decompilation", build: "Builds from your ROM" };
@@ -294,11 +352,11 @@
   load();
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onmousedown={() => (inputMode = "keys")} />
 
 <main style="--accent: {system?.info.color ?? '#f2b04c'}">
   <header>
-    <h1>portshelf</h1>
+    <h1>PortShelf</h1>
     <label class="toggle">
       <input type="checkbox" bind:checked={showAll} onchange={() => { systemIndex = 0; gameIndex = 0; }} />
       Show every known port
@@ -390,21 +448,62 @@
   </div>
 
   <footer>
-    {#if view === "games"}<span><kbd>Esc</kbd> / <kbd>B</kbd> Systems</span>{/if}
-    <span><kbd>←</kbd><kbd>→</kbd> Browse</span>
-    <span><kbd>Enter</kbd> / <kbd>A</kbd> {view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : "Play"}</span>
-    {#if view === "games"}<span><kbd>S</kbd> / <kbd>Y</kbd> Settings</span>{/if}
-    {#if view === "games"}<span><kbd>R</kbd> Rename</span>{/if}
-    <span><kbd>K</kbd> Known ports</span>
-    <span><kbd>Tab</kbd> / <kbd>Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
+    {#if inputMode === "pad"}
+      {#if view === "games"}<span><kbd class="pad b">B</kbd> Systems</span>{/if}
+      <span><kbd class="pad">✥</kbd> Browse</span>
+      <span><kbd class="pad a">A</kbd> {primaryLabel}</span>
+      {#if view === "games"}<span><kbd class="pad y">Y</kbd> Settings</span>{/if}
+      {#if view === "games"}<span><kbd class="pad">LB</kbd><kbd class="pad">RB</kbd> System</span>{/if}
+      <span><kbd class="pad x">X</kbd> Known ports</span>
+      <span><kbd class="pad">Start</kbd> Search</span>
+      <span><kbd class="pad">Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
+    {:else}
+      {#if view === "games"}<span><kbd>Esc</kbd> Systems</span>{/if}
+      <span><kbd>←</kbd><kbd>→</kbd> Browse</span>
+      <span><kbd>Enter</kbd> {primaryLabel}</span>
+      {#if view === "games"}<span><kbd>S</kbd> Settings</span>{/if}
+      {#if view === "games"}<span><kbd>R</kbd> Rename</span>{/if}
+      <span><kbd>K</kbd> Known ports</span>
+      <span><kbd>Ctrl</kbd><kbd>F</kbd> Search</span>
+      <span><kbd>Tab</kbd> {showAll ? "Installed only" : "Every known port"}</span>
+    {/if}
   </footer>
 </main>
+
+{#if searchOpen && catalog}
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div class="scrim" onclick={() => (searchOpen = false)}>
+    <div class="search" role="dialog" aria-label="Search games" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        class="query" type="search" placeholder="Search every system…" autofocus
+        bind:value={query} oninput={() => (searchIndex = 0)} onkeydown={onSearchKey}
+        aria-controls="search-results" aria-activedescendant={results[searchIndex] ? `result-${results[searchIndex].id}` : undefined}
+      />
+      <ul id="search-results" class="results" role="listbox">
+        {#each results as port, i (port.id)}
+          <li id="result-{port.id}" role="option" aria-selected={i === searchIndex}>
+            <button class:on={i === searchIndex} onclick={() => pickResult(port)} onmouseenter={() => (searchIndex = i)}>
+              <span class="thumb">{#if covers[port.id]}<img src={covers[port.id]} alt="" />{/if}</span>
+              <span class="info">
+                <span class="name">{displayName(port)}</span>
+                <span class="meta">{catalog.consoles[port.console].name} · {kindLabel[port.kind]}{#if isInstalled(port.id)} · <span class="installed">installed</span>{/if}</span>
+              </span>
+            </button>
+          </li>
+        {:else}
+          <li class="none">No game matches “{query}”.</li>
+        {/each}
+      </ul>
+    </div>
+  </div>
+{/if}
 
 {#if knownFor && catalog}
   <aside aria-label="Known {catalog.consoles[knownFor].name} ports">
     <button class="close ghost" onclick={() => (knownFor = null)} aria-label="Close">×</button>
     <h2>{catalog.consoles[knownFor].name}</h2>
-    <p class="muted">Every port portshelf knows about for this system. Links go to each project's page.</p>
+    <p class="muted">Every port PortShelf knows about for this system. Links go to each project's page.</p>
     <ul class="known">
       {#each knownPorts(knownFor) as port (port.id)}
         <li>
@@ -521,6 +620,11 @@
 
   footer { display: flex; gap: 22px; justify-content: center; color: #8f877b; font-size: 13px; padding: 8px 0 4px; flex-wrap: wrap; }
   footer span { display: inline-flex; align-items: center; gap: 4px; }
+  kbd.pad { border-radius: 10px; min-width: 22px; font-weight: 700; }
+  kbd.pad.a { background: #3f8f3f; border-color: #3f8f3f; color: #fff; }
+  kbd.pad.b { background: #b8413a; border-color: #b8413a; color: #fff; }
+  kbd.pad.x { background: #2f63b8; border-color: #2f63b8; color: #fff; }
+  kbd.pad.y { background: #c9a227; border-color: #c9a227; color: #1a1510; }
   kbd {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
@@ -544,6 +648,18 @@
   }
   code { font-size: 12px; color: #9b948a; }
   .muted { color: #9b948a; }
+  .scrim { position: fixed; inset: 0; background: rgba(8, 8, 10, 0.6); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }
+  .search { width: min(640px, 92vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,0.6); overflow: hidden; }
+  .query { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #333; background: transparent; color: inherit; font: 18px system-ui, sans-serif; padding: 16px 18px; outline: none; }
+  .results { list-style: none; margin: 0; padding: 6px; max-height: 56vh; overflow-y: auto; }
+  .results button { width: 100%; display: flex; gap: 12px; align-items: center; background: none; border: 0; border-radius: 8px; padding: 6px 8px; text-align: left; }
+  .results button.on { background: #2c2a33; }
+  .results .thumb { width: 56px; height: 40px; flex: none; border-radius: 4px; overflow: hidden; background: #2d2c33; }
+  .results .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .results .name { display: block; font-weight: 600; }
+  .results .meta { display: block; font-size: 12px; color: #9b948a; }
+  .results .installed { color: #9fd48b; }
+  .results .none { padding: 14px; color: #9b948a; }
   .link.inline { font-size: inherit; padding: 0; color: #d6cec2; }
   .known { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
   .known li { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 8px; background: #222127; }

@@ -1,4 +1,4 @@
-//! portshelf backend: the port catalog, the user's library (which ports are
+//! PortShelf backend: the port catalog, the user's library (which ports are
 //! installed and how to start them), launching, and reading/writing the ports'
 //! own config files so the shelf can edit them.
 
@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod gamepad;
 mod scrape;
 
 const CATALOG: &str = include_str!("../../catalog/ports.json");
@@ -446,6 +447,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            gamepad::spawn(app.handle().clone());
             // Tiling compositors draw no title bar, so GTK adds its own buttons; drop them on
             // Linux. Windows and macOS keep their native title bar.
             if let Some(window) = tauri::Manager::get_webview_window(app, "main") {
@@ -453,7 +455,7 @@ pub fn run() {
                 window.set_decorations(false)?;
                 // Development builds are told apart by the title (a compositor rule keeps them aside).
                 #[cfg(debug_assertions)]
-                window.set_title("portshelf (dev)")?;
+                window.set_title("PortShelf (dev)")?;
             }
             let _ = app;
             Ok(())

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "portshelf",
+  "productName": "PortShelf",
   "version": "0.1.0",
   "identifier": "dev.portshelf.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "portshelf",
+        "title": "PortShelf",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
