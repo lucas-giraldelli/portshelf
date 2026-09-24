@@ -27,7 +27,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Browse | Left / Right | D-pad or left stick |
 | Open system / play | Enter | South face button (Xbox A, PlayStation Cross) |
 | Back | Esc | East face button (Xbox B, PlayStation Circle) |
-| Quit (press twice on the systems screen) | Esc | East face button |
+| Quit (from the systems screen, then confirm) | Esc | East face button |
 | Settings | S | North face button (Xbox Y, PlayStation Triangle) |
 | Known ports of the system | K | West face button (Xbox X, PlayStation Square) |
 | Rename | R | |

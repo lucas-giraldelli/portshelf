@@ -25,7 +25,7 @@
   let settingsOpen = $state(false);
   // Every port the catalog knows for one system, with links to the projects.
   let knownFor = $state<string | null>(null);
-  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen;
+  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen || quitOpen;
 
   // The footer shows the controls of whatever was used last: controller, or keyboard/mouse.
   let inputMode = $state<"keys" | "pad">("keys");
@@ -260,19 +260,21 @@
     gameIndex = 0;
   }
 
-  // Back from the systems screen asks once, then quits on the second press.
-  let quitArmed = $state(false);
-  let quitTimer: ReturnType<typeof setTimeout> | undefined;
+  // Back on the systems screen asks whether to quit, in a yes / no dialog ("No" focused).
+  let quitOpen = $state(false);
+  let quitYes = $state(false);
   function back() {
     if (knownFor) knownFor = null;
     else if (settingsOpen) settingsOpen = false;
     else if (view === "games") view = "systems";
-    else if (quitArmed) invoke("quit");
     else {
-      quitArmed = true;
-      clearTimeout(quitTimer);
-      quitTimer = setTimeout(() => (quitArmed = false), 2500);
+      quitYes = false;
+      quitOpen = true;
     }
+  }
+  function answerQuit(yes: boolean) {
+    quitOpen = false;
+    if (yes) invoke("quit");
   }
 
   async function play(port: Port) {
@@ -313,6 +315,15 @@
       openSearch();
       return;
     }
+    if (quitOpen) {
+      e.preventDefault();
+      if (["ArrowLeft", "ArrowRight", "a", "d", "Tab"].includes(e.key)) quitYes = !quitYes;
+      else if (e.key === "Enter" || e.key === " ") answerQuit(quitYes);
+      else if (e.key === "Escape" || e.key === "Backspace") answerQuit(false);
+      else if (e.key.toLowerCase() === "y") answerQuit(true);
+      else if (e.key.toLowerCase() === "n") answerQuit(false);
+      return;
+    }
     if (e.target instanceof HTMLInputElement || editingName || searchOpen) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
@@ -330,6 +341,12 @@
   // Start opens search, LB / RB switch system while looking at games.
   function onPad(action: string) {
     inputMode = "pad";
+    if (quitOpen) {
+      if (action === "left" || action === "right") quitYes = !quitYes;
+      else if (action === "a") answerQuit(quitYes);
+      else if (action === "b") answerQuit(false);
+      return;
+    }
     if (searchOpen) {
       if (action === "down") searchIndex = Math.min(searchIndex + 1, results.length - 1);
       else if (action === "up") searchIndex = Math.max(searchIndex - 1, 0);
@@ -469,9 +486,6 @@
   {/if}
   </div>
 
-  {#if quitArmed}
-    <p class="quit-hint" role="status">Press {inputMode === "pad" ? "B" : "Esc"} again to quit PortShelf</p>
-  {/if}
   <footer>
     {#if inputMode === "pad"}
       {#if view === "games"}<span><PadGlyph button="east" /> Systems</span>{/if}
@@ -496,6 +510,30 @@
     {/if}
   </footer>
 </main>
+
+{#if quitOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div class="scrim center" onclick={() => answerQuit(false)}>
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="quit-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <h2 id="quit-title">Quit PortShelf?</h2>
+      <div class="choices">
+        <button class:on={!quitYes} onclick={() => answerQuit(false)} onmouseenter={() => (quitYes = false)}>No</button>
+        <button class:on={quitYes} onclick={() => answerQuit(true)} onmouseenter={() => (quitYes = true)}>Yes</button>
+      </div>
+      <p class="dialog-hints">
+        {#if inputMode === "pad"}
+          <span><PadGlyph button="dpad" /> Choose</span>
+          <span><PadGlyph button="south" /> Confirm</span>
+          <span><PadGlyph button="east" /> Cancel</span>
+        {:else}
+          <span><kbd>←</kbd><kbd>→</kbd> Choose</span>
+          <span><kbd>Enter</kbd> Confirm</span>
+          <span><kbd>Esc</kbd> Cancel</span>
+        {/if}
+      </p>
+    </div>
+  </div>
+{/if}
 
 {#if searchOpen && catalog}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -675,10 +713,20 @@
   }
   code { font-size: 12px; color: #9b948a; }
   .muted { color: #9b948a; }
-  .quit-hint {
-    position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); margin: 0;
-    background: #2c2a33; border: 1px solid #4a4540; border-radius: 8px; padding: 8px 16px; color: #eee8df;
+  .scrim.center { place-items: center; padding-top: 0; }
+  .dialog {
+    width: min(380px, 90vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6); padding: 22px 22px 14px; text-align: center;
   }
+  .dialog h2 { margin: 0 0 18px; font-size: 20px; }
+  .choices { display: flex; gap: 12px; justify-content: center; }
+  .choices button {
+    min-width: 110px; padding: 9px 0; border-radius: 8px; border: 1px solid #4a4540;
+    background: #2c2a33; font-weight: 600;
+  }
+  .choices button.on { background: #f2b04c; border-color: #f2b04c; color: #1a1510; }
+  .dialog-hints { display: flex; gap: 16px; justify-content: center; margin: 16px 0 0; font-size: 12px; color: #8f877b; }
+  .dialog-hints span { display: inline-flex; align-items: center; gap: 4px; }
   .scrim { position: fixed; inset: 0; background: rgba(8, 8, 10, 0.6); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }
   .search { width: min(640px, 92vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,0.6); overflow: hidden; }
   .query { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #333; background: transparent; color: inherit; font: 18px system-ui, sans-serif; padding: 16px 18px; outline: none; }
