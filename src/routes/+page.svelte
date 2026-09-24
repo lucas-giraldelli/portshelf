@@ -1138,8 +1138,8 @@
   .dialog.options h3 { margin: 0 0 12px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
   .dialog.options .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
   .dialog.options small { color: var(--muted); font-size: 13px; }
-  .segmented { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 38px; }
-  .segmented button { flex: 1; border: 0; background: var(--surface); font-weight: 600; font-size: 14px; }
+  .segmented { display: flex; overflow: hidden; }
+  .segmented button { flex: 1; border: 0; background: var(--surface); font: inherit; color: inherit; }
   .segmented button + button { border-left: 1px solid var(--border); }
   .segmented button.on { background: var(--accent); color: var(--on-accent); }
   .folder { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
@@ -1163,10 +1163,13 @@
     background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
     background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
   .field select option { background: var(--panel); color: var(--text); }
-  .field select, .field input {
-    font: inherit; color: var(--text); background-color: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px 10px;
+  /* Selects, text fields and the segmented toggle share one height, border, radius and font. */
+  .field select, .field input, .segmented {
+    box-sizing: border-box; height: 40px; border: 1px solid var(--border); border-radius: 8px;
+    font: 600 14px/1 "Atkinson Hyperlegible Next", system-ui, sans-serif; color: var(--text);
   }
+  .field select, .field input { background-color: var(--surface); padding-left: 12px; }
+  .field input { font-weight: 500; padding-right: 12px; }
   .warn-text { color: var(--warn); font-size: 14px; margin: 0 0 12px; }
   .choices button:disabled { opacity: 0.5; cursor: default; }
   .scrim.center { place-items: center; padding-top: 0; }
