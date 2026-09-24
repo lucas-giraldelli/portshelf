@@ -9,6 +9,7 @@
   import PadGlyph from "$lib/PadGlyph.svelte";
   import SystemLogo from "$lib/SystemLogo.svelte";
   import { applyTheme, themes, type Mode } from "$lib/themes";
+  import { defaultLang, languages, translate, type Key, type Lang } from "$lib/i18n";
   import { open } from "@tauri-apps/plugin-dialog";
   import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -24,11 +25,15 @@
   };
   let themeId = $state(stored("portshelf.theme") ?? "arcade");
   let mode = $state<Mode>((stored("portshelf.mode") as Mode) ?? "dark");
+  let lang = $state<Lang>((stored("portshelf.lang") as Lang) ?? defaultLang());
+  /** Interface text in the chosen language. */
+  const tr = (key: Key, vars: Record<string, string | number> = {}) => translate(lang, key, vars);
   $effect(() => {
     applyTheme(themeId, mode);
     try {
       localStorage.setItem("portshelf.theme", themeId);
       localStorage.setItem("portshelf.mode", mode);
+      localStorage.setItem("portshelf.lang", lang);
     } catch {
       // not persisted; the theme still applies for this session
     }
@@ -48,7 +53,13 @@
   let settingsOpen = $state(false);
   // Every port the catalog knows for one system, with links to the projects.
   let knownFor = $state<string | null>(null);
-  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen || quitOpen || addPort !== null;
+  const panelOpen = () => settingsOpen || knownFor !== null || searchOpen || quitOpen || addPort !== null || optionsOpen;
+  // App settings dialog: appearance, language, ROM folder, adding ports.
+  let optionsOpen = $state(false);
+  const systemRomStatus = (consoleId: string) => {
+    const installed = (catalog?.ports ?? []).filter((p) => p.console === consoleId && isInstalled(p.id));
+    return { ready: installed.filter((p) => romReady(p.id)).length, installed: installed.length };
+  };
 
   // ROM folder: <root>/<system>/<game>/, created on first choice and synced on start and Rescan.
   type RomSummary = { ready: number; installed: number; assigned: number };
@@ -61,7 +72,7 @@
       romSummary = await invoke<RomSummary>("sync_roms");
       library = await invoke("get_library");
       if (game) await refreshRom(game);
-      if (romSummary.assigned) flash(`${romSummary.assigned} game file${romSummary.assigned === 1 ? "" : "s"} found in the ROM folder`);
+      if (romSummary.assigned) flash(tr("msg.filesFound", { count: romSummary.assigned }));
     } catch (e) {
       error = String(e);
     } finally {
@@ -69,14 +80,14 @@
     }
   }
   async function chooseRomFolder() {
-    const dir = await open({ directory: true, title: "Choose where your game files live", defaultPath: library?.roms_dir || undefined });
+    const dir = await open({ directory: true, title: tr("pick.romFolder"), defaultPath: library?.roms_dir || undefined });
     if (typeof dir !== "string") return;
     syncing = true;
     try {
       romSummary = await invoke<RomSummary>("set_roms_dir", { dir });
       library = await invoke("get_library");
       if (game) await refreshRom(game);
-      flash("ROM folder ready: put each game's file in its own folder");
+      flash(tr("msg.romFolderReady"));
     } catch (e) {
       error = String(e);
     } finally {
@@ -85,11 +96,10 @@
   }
   // The ROM button opens the system's file chooser inside the system's folder, where every
   // game has its own folder; the picked file goes to the game whose folder it is in.
-  async function romFolderAction() {
+  async function romFolderAction(consoleId: string | undefined = system?.id) {
     if (!library?.roms_dir) return chooseRomFolder();
-    const consoleId = system?.id;
     const picked = await open({
-      title: consoleId ? `${catalog?.consoles[consoleId].name} game files` : "Game files",
+      title: consoleId ? tr("pick.systemFiles", { system: catalog?.consoles[consoleId].name ?? "" }) : tr("pick.gameFiles"),
       defaultPath: consoleId ? `${library.roms_dir}/${consoleId}` : library.roms_dir,
     });
     if (typeof picked !== "string") return;
@@ -98,7 +108,7 @@
       library = await invoke("get_library");
       const names = ids.map((id) => catalog?.ports.find((p) => p.id === id)).filter((p): p is Port => !!p);
       await Promise.all(names.filter((p) => isInstalled(p.id)).map(refreshRom));
-      flash(`Game file set for ${names.map(displayName).join(" and ")}`);
+      flash(tr("msg.fileSetFor", { names: names.map(displayName).join(` ${tr("game.and")} `) }));
     } catch (e) {
       error = String(e);
     }
@@ -172,7 +182,8 @@
   const canInstall = (port: Port) => !!port.install?.[os as "linux" | "windows" | "macos"];
   /** Not made for this operating system (for example, Windows only). */
   const unavailable = (port: Port) => !!port.platforms && !port.platforms.includes(os);
-  const platformLabel = (port: Port) => (port.platforms ?? []).map((p) => ({ windows: "Windows", linux: "Linux", macos: "macOS" })[p] ?? p).join(" and ") + " only";
+  const platformLabel = (port: Port) =>
+    tr("game.onlyOn", { platforms: (port.platforms ?? []).map((p) => ({ windows: "Windows", linux: "Linux", macos: "macOS" })[p] ?? p).join(` ${tr("game.and")} `) });
   /** Ports that ask for their game file themselves (PortShelf does not know where they keep it). */
   const selfManaged = (id: string) => isInstalled(id) && !library?.installed[id]?.rom;
   // "Add port": pick a port's program; PortShelf guesses which catalog port it is from the
@@ -201,8 +212,9 @@
     return best.id;
   }
   async function startAddPort() {
+    optionsOpen = false;
     if (panelOpen()) return;
-    const exec = await open({ title: "Choose the port's program" });
+    const exec = await open({ title: tr("pick.program") });
     if (typeof exec !== "string") return;
     const choice = guessPort(exec);
     addPort = { exec, choice, name: "", console: system?.id ?? "n64" };
@@ -219,7 +231,7 @@
       if (port) {
         await refreshRom(port);
         showOnShelf(port);
-        flash(`${displayName(port)} added`);
+        flash(tr("msg.added", { name: displayName(port) }));
       }
     } catch (e) {
       error = String(e);
@@ -233,8 +245,8 @@
   const installLabel = (id: string) => {
     const p = installing[id];
     if (!p) return "";
-    if (p.stage === "downloading") return p.total ? `Downloading ${mb(p.done)} / ${mb(p.total)} MB` : `Downloading ${mb(p.done)} MB`;
-    return p.stage === "unpacking" ? "Unpacking…" : "Finishing…";
+    if (p.stage === "downloading") return p.total ? tr("game.downloading", { done: mb(p.done), total: mb(p.total) }) : tr("game.downloadingNoTotal", { done: mb(p.done) });
+    return p.stage === "unpacking" ? tr("game.unpacking") : tr("game.finishing");
   };
   async function installPort(port: Port) {
     if (installing[port.id]) return;
@@ -246,7 +258,7 @@
       const at = systems[systemIndex]?.ports.findIndex((p) => p.id === port.id) ?? -1;
       if (at >= 0) gameIndex = at;
       await refreshRom(port);
-      flash(`${displayName(port)} installed${roms[port.id]?.ready ? "" : ". Select the game file to play"}`);
+      flash(tr(roms[port.id]?.ready ? "msg.installed" : "msg.installedNeedsFile", { name: displayName(port) }));
     } catch (e) {
       delete installing[port.id];
       error = String(e);
@@ -292,14 +304,14 @@
       await invoke("unlock_cover", { id: port.id });
       const found = await invoke<string | null>("scrape_cover", { id: port.id, console: port.console, title, force: true });
       await loadCover(port.id);
-      flash(found ? `Cover: ${found.replace(/\.png$/, "")}` : "No cover found");
+      flash(found ? tr("msg.cover", { file: found.replace(/\.png$/, "") }) : tr("msg.noCover"));
     } catch (e) {
       error = String(e);
     }
   }
 
   async function pickCover(port: Port) {
-    const picked = await open({ title: `Cover for ${displayName(port)}`, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+    const picked = await open({ title: tr("pick.cover", { name: displayName(port) }), filters: [{ name: tr("pick.images"), extensions: ["png", "jpg", "jpeg", "webp"] }] });
     if (typeof picked !== "string") return;
     try {
       await invoke("set_cover", { id: port.id, path: picked });
@@ -376,15 +388,15 @@
   async function selectRom(port: Port) {
     const extensions = catalog?.consoles[port.console].media === "disc" ? ["iso", "rvz", "gcm", "ciso", "wbfs", "nkit.iso"] : ["z64", "n64", "v64"];
     const picked = await open({
-      title: `Select the ${catalog?.consoles[port.console].name} game file for ${port.name}`,
+      title: tr("pick.gameFile", { system: catalog?.consoles[port.console].name ?? "", name: displayName(port) }),
       defaultPath: roms[port.id]?.browse_dir,
-      filters: [{ name: "Game files", extensions }],
+      filters: [{ name: tr("pick.gameFiles"), extensions }],
     });
     if (typeof picked !== "string") return;
     try {
       await invoke("select_rom", { id: port.id, path: picked });
       await refreshRom(port);
-      status = "Game file ready";
+      status = tr("msg.fileReady");
       setTimeout(() => (status = ""), 3000);
     } catch (e) {
       error = String(e);
@@ -406,11 +418,11 @@
   let system = $derived(systems[systemIndex]);
   let game = $derived(system?.ports[gameIndex]);
   let primaryLabel = $derived(
-    view === "systems" ? "Open"
+    view === "systems" ? tr("game.open")
     : !game ? ""
-    : isInstalled(game.id) ? (romReady(game.id) ? (selfManaged(game.id) ? "Start" : "Play") : "Select game file")
-    : unavailable(game) ? "Project page"
-    : canInstall(game) ? "Install" : "Get it");
+    : isInstalled(game.id) ? (romReady(game.id) ? (selfManaged(game.id) ? tr("game.start") : tr("game.play")) : tr("game.selectFile"))
+    : unavailable(game) ? tr("game.projectPage")
+    : canInstall(game) ? tr("game.install") : tr("game.getIt"));
 
   async function load() {
     try {
@@ -461,7 +473,8 @@
   let quitOpen = $state(false);
   let quitYes = $state(false);
   function back() {
-    if (addPort) addPort = null;
+    if (optionsOpen) optionsOpen = false;
+    else if (addPort) addPort = null;
     else if (knownFor) knownFor = null;
     else if (settingsOpen) settingsOpen = false;
     else if (view === "games") view = "systems";
@@ -478,7 +491,7 @@
   async function play(port: Port) {
     try {
       await invoke("launch", { id: port.id });
-      status = `${port.name} started`;
+      status = tr("msg.started", { name: displayName(port) });
       setTimeout(() => (status = ""), 3000);
     } catch (e) {
       error = String(e);
@@ -525,9 +538,10 @@
     if (e.target instanceof HTMLInputElement || editingName || searchOpen) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
-      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: romFolderAction, p: startAddPort, Tab: toggleAll,
-      t: () => { const ids = Object.keys(themes); themeId = ids[(ids.indexOf(themeId) + 1) % ids.length]; flash(`Theme: ${themes[themeId].name}`); },
-      m: () => (mode = mode === "dark" ? "light" : "dark"), k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, i: () => romFolderAction(), p: startAddPort, o: () => !panelOpen() && (optionsOpen = true), Tab: toggleAll,
+      t: () => { const ids = Object.keys(themes); themeId = ids[(ids.indexOf(themeId) + 1) % ids.length]; flash(tr("msg.theme", { name: themes[themeId].name })); },
+      m: () => (mode = mode === "dark" ? "light" : "dark"),
+      l: () => (lang = lang === "en" ? "pt-BR" : "en"), k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
     };
     const action = actions[e.key];
     if (action) {
@@ -570,8 +584,13 @@
       if (action === "b") addPort = null;
       return;
     }
+    if (optionsOpen) {
+      if (action === "b" || action === "y") optionsOpen = false;
+      return;
+    }
     const actions: Record<string, () => void> = {
-      left: () => move(-1), right: () => move(1), a: confirm, b: back, y: openSettings,
+      left: () => move(-1), right: () => move(1), a: confirm, b: back,
+      y: () => (view === "systems" ? (optionsOpen = true) : openSettings()),
       select: toggleAll, start: openSearch, x: () => system && (knownFor = system.id),
       lb: () => switchSystem(-1), rb: () => switchSystem(1),
     };
@@ -585,7 +604,7 @@
   listen<string>("pad", (e) => onPad(e.payload));
 
   const prettyKey = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  const kindLabel = { recomp: "Static recompilation", decomp: "Decompilation", build: "Builds from your ROM", custom: "Added by you" };
+  const kindLabel = (kind: string) => tr(`kind.${kind}` as Key);
 
   // Mouse: drag the carousel sideways (or use the wheel) to browse. A drag of about one
   // item's width moves one step; a drag never counts as a click on the item under it.
@@ -641,35 +660,17 @@
 <main class:pad-mode={inputMode === "pad"} style="--system: {system?.info.color ?? 'var(--accent)'}">
   <header>
     <h1 class="brand"><img src="/icon.svg" alt="" width="34" height="34" draggable="false" />PortShelf</h1>
-    <button class="ghost" onclick={startAddPort}>Add port +</button>
-    <label class="theme-picker">
-      <span class="sr-only">Theme</span>
-      <select bind:value={themeId} title={themes[themeId]?.description}>
-        {#each Object.entries(themes) as [id, theme]}
-          <option value={id}>{theme.name}</option>
-        {/each}
-      </select>
-    </label>
-    <button class="ghost mode" onclick={() => (mode = mode === "dark" ? "light" : "dark")} title="Switch to {mode === 'dark' ? 'light' : 'dark'} mode" aria-label="Switch to {mode === 'dark' ? 'light' : 'dark'} mode">
-      {mode === "dark" ? "☀" : "☾"}
-    </button>
-    {#if library?.roms_dir}
-      <button class="romchip" onclick={romFolderAction} title="Open {library.roms_dir}/{system?.id ?? ''}">
-        {system ? `${system.info.name} ROMs` : "ROMs"}{#if syncing} · syncing…{:else if systemRoms?.installed} · {systemRoms.ready} of {systemRoms.installed} ready{/if}
-      </button>
-    {:else if library}
-      <button class="romchip" onclick={chooseRomFolder}>Choose ROM folder</button>
-    {/if}
+    <button class="tool square gear" onclick={() => (optionsOpen = true)} title={tr("settings.open")} aria-label={tr("settings.open")}>⚙</button>
   </header>
 
   {#if error}
-    <p class="error" role="alert">{error} <button class="ghost" onclick={() => (error = "")}>dismiss</button></p>
+    <p class="error" role="alert">{error} <button class="ghost" onclick={() => (error = "")}>{tr("common.dismiss")}</button></p>
   {/if}
 
   <div class="stage">
   {#if view === "systems"}
    <div class="view" in:fade={{ duration: 220, delay: 120 }} out:scale={{ start: 1.6, opacity: 0, duration: 260, easing: cubicOut }}>
-    <section class="carousel systems" aria-label="Systems"
+    <section class="carousel systems" aria-label={tr("systems.aria")}
       onpointerdown={(e) => dragStart(e, 520)} onpointermove={dragMove} onpointerup={dragEnd} onpointerleave={dragEnd} onwheel={onWheel}>
       {#each systems as s, i (s.id)}
         <button class="slot" class:focused={i === systemIndex} style={slot(i, systemIndex, 520, systems.length)} onclick={() => clickSlot(i, systemIndex, (j) => (systemIndex = j))}>
@@ -681,8 +682,8 @@
       <div class="caption">
         <h2 class="system-logo"><SystemLogo id={system.id} name={system.info.name} height={52} /></h2>
         <p>
-          {system.info.year} · {system.installed} installed ·
-          <button class="link inline" onclick={() => (knownFor = system!.id)}>{knownPorts(system.id).length} known</button>
+          {system.info.year} · {tr("systems.installed", { count: system.installed })} ·
+          <button class="link inline" onclick={() => (knownFor = system!.id)}>{tr("systems.known", { count: knownPorts(system.id).length })}</button>
         </p>
       </div>
     {/if}
@@ -709,42 +710,42 @@
           <!-- svelte-ignore a11y_autofocus -->
           <input class="rename" bind:value={nameDraft} autofocus
             onkeydown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") { e.stopPropagation(); editingName = false; } }}
-            onblur={saveName} aria-label="Game name" />
+            onblur={saveName} aria-label={tr("game.nameField")} />
         {:else}
           <h2 class="title">
             {displayName(game)}
-            <button class="icon" onclick={startRename} title="Rename (R)" aria-label="Rename">✎</button>
+            <button class="icon" onclick={startRename} title={tr("game.renameHint")} aria-label={tr("game.rename")}>✎</button>
           </h2>
           {#if library?.overrides?.[game.id]?.name}<p class="original">{game.name}</p>{/if}
         {/if}
-        <p>{kindLabel[game.kind]}{#if authorsOf(game)} · by {authorsOf(game)}{/if}{isInstalled(game.id) ? "" : " · not installed"}</p>
+        <p>{kindLabel(game.kind)}{#if authorsOf(game)} · {tr("game.by", { authors: authorsOf(game) })}{/if}{isInstalled(game.id) ? "" : ` · ${tr("game.notInstalled")}`}</p>
         {#if selfManaged(game.id)}
-          <p class="rom note">Asks for the game file when it starts</p>
+          <p class="rom note">{tr("game.asksForFile")}</p>
         {:else if isInstalled(game.id) && roms[game.id] && !romReady(game.id)}
-          <p class="rom missing">Missing game file</p>
+          <p class="rom missing">{tr("game.missingFile")}</p>
         {/if}
         <div class="actions">
           {#if isInstalled(game.id) && romReady(game.id)}
-            <button class="primary" onclick={() => play(game!)}>{selfManaged(game.id) ? "Start" : "Play"}</button>
-            <button class="ghost" onclick={() => selectRom(game!)}>Change game file</button>
-            <button class="ghost" onclick={openSettings}>Settings</button>
+            <button class="primary" onclick={() => play(game!)}>{selfManaged(game.id) ? tr("game.start") : tr("game.play")}</button>
+            <button class="ghost" onclick={() => selectRom(game!)}>{tr("game.changeFile")}</button>
+            <button class="ghost" onclick={openSettings}>{tr("game.settings")}</button>
           {:else if isInstalled(game.id)}
-            <button class="primary" onclick={() => selectRom(game!)}>Select game file</button>
-            <button class="ghost" onclick={openSettings}>Settings</button>
+            <button class="primary" onclick={() => selectRom(game!)}>{tr("game.selectFile")}</button>
+            <button class="ghost" onclick={openSettings}>{tr("game.settings")}</button>
           {:else if installing[game.id]}
             <button class="primary progress" disabled style="--p:{installing[game.id].total ? (installing[game.id].done / installing[game.id].total!) * 100 : 0}%">{installLabel(game.id)}</button>
           {:else if unavailable(game)}
             <button class="primary" disabled>{platformLabel(game)}</button>
           {:else if canInstall(game)}
-            <button class="primary" onclick={() => installPort(game!)}>Install</button>
+            <button class="primary" onclick={() => installPort(game!)}>{tr("game.install")}</button>
           {:else}
-            <button class="primary" onclick={() => openUrl(game!.repo)}>Get it</button>
+            <button class="primary" onclick={() => openUrl(game!.repo)}>{tr("game.getIt")}</button>
           {/if}
-          <button class="ghost" onclick={() => openUrl(game!.repo)}>Project page</button>
+          <button class="ghost" onclick={() => openUrl(game!.repo)}>{tr("game.projectPage")}</button>
         </div>
         <div class="actions small">
-          <button class="link" onclick={() => pickCover(game!)}>Choose cover…</button>
-          <button class="link" onclick={() => findCover(game!)}>Find cover online</button>
+          <button class="link" onclick={() => pickCover(game!)}>{tr("game.chooseCover")}</button>
+          <button class="link" onclick={() => findCover(game!)}>{tr("game.findCover")}</button>
         </div>
         {#if status}<p class="status">{status}</p>{/if}
       </div>
@@ -755,25 +756,25 @@
 
   <footer>
     {#if inputMode === "pad"}
-      {#if view === "games"}<span><PadGlyph button="east" /> Systems</span>{/if}
-      {#if view === "systems"}<span><PadGlyph button="east" /> Quit</span>{/if}
-      <span><PadGlyph button="dpad" /> Browse</span>
+      {#if view === "games"}<span><PadGlyph button="east" /> {tr("footer.systems")}</span>{/if}
+      {#if view === "systems"}<span><PadGlyph button="east" /> {tr("footer.quit")}</span><span><PadGlyph button="north" /> {tr("footer.options")}</span>{/if}
+      <span><PadGlyph button="dpad" /> {tr("footer.browse")}</span>
       <span><PadGlyph button="south" /> {primaryLabel}</span>
-      {#if view === "games"}<span><PadGlyph button="north" /> Settings</span>{/if}
-      {#if view === "games"}<span><kbd class="pad">LB</kbd><kbd class="pad">RB</kbd> System</span>{/if}
-      <span><PadGlyph button="west" /> Known ports</span>
-      <span><kbd class="pad">Start</kbd> Search</span>
-      <span><kbd class="pad">Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
+      {#if view === "games"}<span><PadGlyph button="north" /> {tr("footer.settings")}</span>{/if}
+      {#if view === "games"}<span><kbd class="pad">LB</kbd><kbd class="pad">RB</kbd> {tr("footer.system")}</span>{/if}
+      <span><PadGlyph button="west" /> {tr("footer.known")}</span>
+      <span><kbd class="pad">Start</kbd> {tr("footer.search")}</span>
+      <span><kbd class="pad">Select</kbd> {showAll ? tr("footer.installedOnly") : tr("footer.everyPort")}</span>
     {:else}
-      {#if view === "games"}<span><kbd>Esc</kbd> Systems</span>{/if}
-      {#if view === "systems"}<span><kbd>Esc</kbd> Quit</span>{/if}
-      <span><kbd>←</kbd><kbd>→</kbd> Browse</span>
+      {#if view === "games"}<span><kbd>Esc</kbd> {tr("footer.systems")}</span>{/if}
+      {#if view === "systems"}<span><kbd>Esc</kbd> {tr("footer.quit")}</span><span><kbd>O</kbd> {tr("footer.options")}</span>{/if}
+      <span><kbd>←</kbd><kbd>→</kbd> {tr("footer.browse")}</span>
       <span><kbd>Enter</kbd> {primaryLabel}</span>
-      {#if view === "games"}<span><kbd>S</kbd> Settings</span>{/if}
-      {#if view === "games"}<span><kbd>R</kbd> Rename</span>{/if}
-      <span><kbd>K</kbd> Known ports</span>
-      <span><kbd>Ctrl</kbd><kbd>F</kbd> Search</span>
-      <span><kbd>Tab</kbd> {showAll ? "Installed only" : "Every known port"}</span>
+      {#if view === "games"}<span><kbd>S</kbd> {tr("footer.settings")}</span>{/if}
+      {#if view === "games"}<span><kbd>R</kbd> {tr("footer.rename")}</span>{/if}
+      <span><kbd>K</kbd> {tr("footer.known")}</span>
+      <span><kbd>Ctrl</kbd><kbd>F</kbd> {tr("footer.search")}</span>
+      <span><kbd>Tab</kbd> {showAll ? tr("footer.installedOnly") : tr("footer.everyPort")}</span>
     {/if}
   </footer>
 </main>
@@ -782,22 +783,95 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="scrim center" onclick={() => answerQuit(false)}>
     <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="quit-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-      <h2 id="quit-title">Quit PortShelf?</h2>
+      <h2 id="quit-title">{tr("quit.title")}</h2>
       <div class="choices">
-        <button class:on={!quitYes} onclick={() => answerQuit(false)} onmouseenter={() => (quitYes = false)}>No</button>
-        <button class:on={quitYes} onclick={() => answerQuit(true)} onmouseenter={() => (quitYes = true)}>Yes</button>
+        <button class:on={!quitYes} onclick={() => answerQuit(false)} onmouseenter={() => (quitYes = false)}>{tr("common.no")}</button>
+        <button class:on={quitYes} onclick={() => answerQuit(true)} onmouseenter={() => (quitYes = true)}>{tr("common.yes")}</button>
       </div>
       <p class="dialog-hints">
         {#if inputMode === "pad"}
-          <span><PadGlyph button="dpad" /> Choose</span>
-          <span><PadGlyph button="south" /> Confirm</span>
-          <span><PadGlyph button="east" /> Cancel</span>
+          <span><PadGlyph button="dpad" /> {tr("footer.choose")}</span>
+          <span><PadGlyph button="south" /> {tr("footer.confirm")}</span>
+          <span><PadGlyph button="east" /> {tr("footer.cancel")}</span>
         {:else}
-          <span><kbd>←</kbd><kbd>→</kbd> Choose</span>
-          <span><kbd>Enter</kbd> Confirm</span>
-          <span><kbd>Esc</kbd> Cancel</span>
+          <span><kbd>←</kbd><kbd>→</kbd> {tr("footer.choose")}</span>
+          <span><kbd>Enter</kbd> {tr("footer.confirm")}</span>
+          <span><kbd>Esc</kbd> {tr("footer.cancel")}</span>
         {/if}
       </p>
+    </div>
+  </div>
+{/if}
+
+{#if optionsOpen && catalog}
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div class="scrim center" onclick={() => (optionsOpen = false)}>
+    <div class="dialog options" role="dialog" aria-modal="true" aria-labelledby="options-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <button class="close ghost" onclick={() => (optionsOpen = false)} aria-label={tr("common.close")}>×</button>
+      <h2 id="options-title">{tr("settings.title")}</h2>
+
+      <section>
+        <h3>{tr("settings.appearance")}</h3>
+        <div class="row">
+          <label class="field">
+            <span>{tr("header.theme")}</span>
+            <select bind:value={themeId}>
+              {#each Object.entries(themes) as [id, theme]}
+                <option value={id}>{theme.name}</option>
+              {/each}
+            </select>
+            <small>{tr(`theme.${themeId}` as Key)}</small>
+          </label>
+          <div class="field">
+            <span>{tr("settings.mode")}</span>
+            <div class="segmented" role="radiogroup" aria-label={tr("settings.mode")}>
+              <button role="radio" aria-checked={mode === "dark"} class:on={mode === "dark"} onclick={() => (mode = "dark")}>☾ {tr("settings.dark")}</button>
+              <button role="radio" aria-checked={mode === "light"} class:on={mode === "light"} onclick={() => (mode = "light")}>☀ {tr("settings.light")}</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>{tr("header.language")}</span>
+            <select bind:value={lang}>
+              {#each Object.entries(languages) as [id, label]}
+                <option value={id}>{label}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h3>{tr("settings.roms")}</h3>
+        <div class="folder">
+          <div>
+            <span class="label">{tr("settings.romFolder")}</span>
+            <code>{library?.roms_dir || tr("settings.noFolder")}</code>
+          </div>
+          <button class="tool" onclick={chooseRomFolder}>{library?.roms_dir ? tr("settings.changeFolder") : tr("header.chooseRomFolder")}</button>
+        </div>
+        {#if library?.roms_dir}
+          <ul class="systems-roms">
+            {#each Object.entries(catalog.consoles).sort((a, b) => a[1].year - b[1].year) as [cid, info] (cid)}
+              {@const st = systemRomStatus(cid)}
+              <li>
+                <SystemLogo id={cid} name={info.name} height={22} />
+                <span class="status" class:done={st.installed > 0 && st.ready === st.installed} class:warn={st.ready < st.installed}>
+                  {st.installed ? tr("settings.readyOf", { ready: st.ready, installed: st.installed }) : tr("settings.noneInstalled")}
+                </span>
+                <button class="tool small" onclick={() => romFolderAction(cid)}>{tr("settings.chooseFile")}</button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+
+      <section>
+        <h3>{tr("settings.ports")}</h3>
+        <div class="folder">
+          <p class="muted">{tr("settings.addPortHint")}</p>
+          <button class="tool" onclick={startAddPort}>{tr("header.addPort")}</button>
+        </div>
+      </section>
     </div>
   </div>
 {/if}
@@ -806,29 +880,29 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="scrim center" onclick={() => (addPort = null)}>
     <div class="dialog add-port" role="dialog" aria-modal="true" aria-labelledby="add-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-      <h2 id="add-title">Add port</h2>
+      <h2 id="add-title">{tr("add.title")}</h2>
       <p class="muted file">{addPort.exec}</p>
       <label class="field">
-        <span>This is</span>
+        <span>{tr("add.thisIs")}</span>
         <select bind:value={addPort.choice}>
           {#each Object.entries(catalog.consoles).sort((a, b) => a[1].year - b[1].year) as [cid, info]}
             <optgroup label={info.name}>
               {#each catalog.ports.filter((p) => p.console === cid) as port (port.id)}
-                <option value={port.id}>{displayName(port)}{isInstalled(port.id) ? " (installed)" : ""}</option>
+                <option value={port.id}>{displayName(port)}{isInstalled(port.id) ? ` ${tr("add.installed")}` : ""}</option>
               {/each}
             </optgroup>
           {/each}
-          <option value="new">Something else (new port)</option>
+          <option value="new">{tr("add.new")}</option>
         </select>
       </label>
       {#if addPort.choice === "new"}
         <label class="field">
-          <span>Name</span>
+          <span>{tr("add.name")}</span>
           <!-- svelte-ignore a11y_autofocus -->
-          <input type="text" bind:value={addPort.name} placeholder="Game name" autofocus />
+          <input type="text" bind:value={addPort.name} placeholder={tr("game.nameField")} autofocus />
         </label>
         <label class="field">
-          <span>System</span>
+          <span>{tr("add.system")}</span>
           <select bind:value={addPort.console}>
             {#each Object.entries(catalog.consoles).sort((a, b) => a[1].year - b[1].year) as [cid, info]}
               <option value={cid}>{info.name}</option>
@@ -836,11 +910,11 @@
           </select>
         </label>
       {:else if isInstalled(addPort.choice)}
-        <p class="warn-text">This port is already on the shelf; adding replaces the program it starts.</p>
+        <p class="warn-text">{tr("add.replaces")}</p>
       {/if}
       <div class="choices">
-        <button onclick={() => (addPort = null)}>Cancel</button>
-        <button class="on" onclick={confirmAddPort} disabled={addPort.choice === "new" && !addPort.name.trim()}>Add</button>
+        <button onclick={() => (addPort = null)}>{tr("common.cancel")}</button>
+        <button class="on" onclick={confirmAddPort} disabled={addPort.choice === "new" && !addPort.name.trim()}>{tr("common.add")}</button>
       </div>
     </div>
   </div>
@@ -849,10 +923,10 @@
 {#if searchOpen && catalog}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="scrim" onclick={() => (searchOpen = false)}>
-    <div class="search" role="dialog" aria-label="Search games" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+    <div class="search" role="dialog" aria-label={tr("search.aria")} tabindex="-1" onclick={(e) => e.stopPropagation()}>
       <!-- svelte-ignore a11y_autofocus -->
       <input
-        class="query" type="search" placeholder="Search every system…" autofocus
+        class="query" type="search" placeholder={tr("search.placeholder")} autofocus
         bind:value={query} oninput={() => (searchIndex = 0)} onkeydown={onSearchKey}
         aria-controls="search-results" aria-activedescendant={results[searchIndex] ? `result-${results[searchIndex].id}` : undefined}
       />
@@ -863,12 +937,12 @@
               <span class="thumb">{#if covers[port.id]}<img src={covers[port.id]} alt="" />{/if}</span>
               <span class="info">
                 <span class="name">{displayName(port)}</span>
-                <span class="meta">{catalog.consoles[port.console].name} · {kindLabel[port.kind]}{#if isInstalled(port.id)} · <span class="installed">installed</span>{/if}</span>
+                <span class="meta">{catalog.consoles[port.console].name} · {kindLabel(port.kind)}{#if isInstalled(port.id)} · <span class="installed">{tr("search.installed")}</span>{/if}</span>
               </span>
             </button>
           </li>
         {:else}
-          <li class="none">No game matches “{query}”.</li>
+          <li class="none">{tr("search.none", { query })}</li>
         {/each}
       </ul>
     </div>
@@ -876,19 +950,19 @@
 {/if}
 
 {#if knownFor && catalog}
-  <aside aria-label="Known {catalog.consoles[knownFor].name} ports">
-    <button class="close ghost" onclick={() => (knownFor = null)} aria-label="Close">×</button>
+  <aside aria-label={tr("known.aria", { system: catalog.consoles[knownFor].name })}>
+    <button class="close ghost" onclick={() => (knownFor = null)} aria-label={tr("common.close")}>×</button>
     <h2>{catalog.consoles[knownFor].name}</h2>
-    <p class="muted">Every port PortShelf knows about for this system. Links go to each project's page.</p>
+    <p class="muted">{tr("known.intro")}</p>
     <ul class="known">
       {#each knownPorts(knownFor) as port (port.id)}
         <li>
-          <button class="thumb" onclick={() => showOnShelf(port)} aria-label="Show {displayName(port)} on the shelf">
+          <button class="thumb" onclick={() => showOnShelf(port)} aria-label={tr("known.show", { name: displayName(port) })}>
             {#if covers[port.id]}<img src={covers[port.id]} alt="" />{/if}
           </button>
           <div class="info">
             <button class="name" onclick={() => showOnShelf(port)}>{displayName(port)}</button>
-            <span class="meta">{kindLabel[port.kind]}{#if isInstalled(port.id)} · <span class="installed">installed</span>{/if}</span>
+            <span class="meta">{kindLabel(port.kind)}{#if isInstalled(port.id)} · <span class="installed">{tr("search.installed")}</span>{/if}</span>
             <button class="link" onclick={() => openUrl(port.repo)}>{host(port.repo)} ↗</button>
           </div>
         </li>
@@ -898,8 +972,8 @@
 {/if}
 
 {#if settingsOpen && config && game}
-  <aside aria-label="{game.name} settings">
-    <button class="close ghost" onclick={() => (settingsOpen = false)} aria-label="Close">×</button>
+  <aside aria-label={tr("settings.aria", { name: displayName(game) })}>
+    <button class="close ghost" onclick={() => (settingsOpen = false)} aria-label={tr("common.close")}>×</button>
     <h2>{game.name}</h2>
     {#if Object.keys(config).length}
       <div class="tabs" role="tablist">
@@ -924,7 +998,7 @@
         {/each}
       </div>
     {:else}
-      <p class="muted">This port has no settings files yet. Start it once and they will show up here.</p>
+      <p class="muted">{tr("settings.none")}</p>
     {/if}
   </aside>
 {/if}
@@ -1047,12 +1121,37 @@
   }
   code { font-size: 13px; color: var(--muted); }
   .muted { color: var(--muted); }
-  .theme-picker select {
-    font: inherit; font-size: 14px; color: var(--text); background: var(--surface);
-    border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
+  /* Header controls share one size, border and radius. */
+  .tool {
+    box-sizing: border-box; height: 38px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center;
+    font: 600 14px/1 "Atkinson Hyperlegible Next", system-ui, sans-serif; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
-  .mode { font-size: 16px; line-height: 1; padding: 5px 10px; }
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tool:hover, .tool:focus-within, .tool:focus-visible { background: var(--surface-2); border-color: color-mix(in srgb, var(--text) 35%, var(--border)); }
+  .tool.square { width: 38px; padding: 0; font-size: 17px; }
+  .gear { font-size: 19px; }
+  .dialog.options { width: min(720px, 94vw); max-height: 88vh; overflow-y: auto; text-align: left; position: relative; padding: 24px 28px; }
+  .dialog.options h2 { text-align: left; margin-bottom: 8px; }
+  .dialog.options .close { position: absolute; top: 14px; right: 14px; }
+  .dialog.options section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 16px; }
+  .dialog.options h3 { margin: 0 0 12px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+  .dialog.options .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .dialog.options small { color: var(--muted); font-size: 13px; }
+  .segmented { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 38px; }
+  .segmented button { flex: 1; border: 0; background: var(--surface); font-weight: 600; font-size: 14px; }
+  .segmented button + button { border-left: 1px solid var(--border); }
+  .segmented button.on { background: var(--accent); color: var(--on-accent); }
+  .folder { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .folder .label { display: block; font-size: 14px; color: var(--muted); }
+  .folder code { font-size: 14px; color: var(--text); word-break: break-all; }
+  .folder p { margin: 0; flex: 1; min-width: 220px; }
+  .systems-roms { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
+  .systems-roms li { display: grid; grid-template-columns: 170px 1fr auto; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface); }
+  .systems-roms .status { font-size: 14px; color: var(--muted); }
+  .systems-roms .status.done { color: var(--ok); }
+  .systems-roms .status.warn { color: var(--warn); }
+  .tool.small { height: 32px; font-size: 13px; padding: 0 12px; }
   .rom.note { color: var(--muted) !important; }
   .primary:disabled { opacity: 0.55; cursor: default; }
   .dialog.add-port { width: min(560px, 92vw); text-align: left; }
@@ -1060,18 +1159,16 @@
   .dialog.add-port .file { font-size: 13px; word-break: break-all; margin: 0 0 14px; }
   .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
   .field span { font-size: 14px; color: var(--muted); }
+  .field select { appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+  .field select option { background: var(--panel); color: var(--text); }
   .field select, .field input {
-    font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+    font: inherit; color: var(--text); background-color: var(--surface); border: 1px solid var(--border);
     border-radius: 8px; padding: 8px 10px;
   }
   .warn-text { color: var(--warn); font-size: 14px; margin: 0 0 12px; }
   .choices button:disabled { opacity: 0.5; cursor: default; }
-  .romchip {
-    background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid var(--accent); color: var(--text);
-    border-radius: 999px; padding: 5px 14px; font-weight: 600;
-    transition: background 0.15s ease;
-  }
-  .romchip:hover, .romchip:focus-visible { background: color-mix(in srgb, var(--accent) 28%, transparent); }
   .scrim.center { place-items: center; padding-top: 0; }
   .dialog {
     width: min(380px, 90vw); background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
