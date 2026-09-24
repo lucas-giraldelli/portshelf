@@ -500,14 +500,11 @@
   <header>
     <h1>PortShelf</h1>
     {#if library?.roms_dir}
-      <span class="romchip">
-        <button class="ghost" onclick={romFolderAction} title="Open {library.roms_dir}/{system?.id ?? ''}">
-          {system ? `${system.info.name} ROMs` : "ROMs"}{#if syncing} · syncing…{:else if systemRoms?.installed} · {systemRoms.ready} of {systemRoms.installed} ready{/if}
-        </button>
-        <button class="link" onclick={chooseRomFolder}>Change</button>
-      </span>
+      <button class="romchip" onclick={romFolderAction} title="Open {library.roms_dir}/{system?.id ?? ''}">
+        {system ? `${system.info.name} ROMs` : "ROMs"}{#if syncing} · syncing…{:else if systemRoms?.installed} · {systemRoms.ready} of {systemRoms.installed} ready{/if}
+      </button>
     {:else if library}
-      <button class="ghost" onclick={chooseRomFolder}>Choose ROM folder</button>
+      <button class="romchip" onclick={chooseRomFolder}>Choose ROM folder</button>
     {/if}
   </header>
 
@@ -827,7 +824,12 @@
   }
   code { font-size: 12px; color: #9b948a; }
   .muted { color: #9b948a; }
-  .romchip { display: inline-flex; align-items: center; gap: 6px; }
+  .romchip {
+    background: rgba(242, 176, 76, 0.12); border: 1px solid #f2b04c; color: #f7d9a6;
+    border-radius: 999px; padding: 5px 14px; font-weight: 600;
+    transition: background 0.15s ease;
+  }
+  .romchip:hover, .romchip:focus-visible { background: rgba(242, 176, 76, 0.25); }
   .scrim.center { place-items: center; padding-top: 0; }
   .dialog {
     width: min(380px, 90vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px;
