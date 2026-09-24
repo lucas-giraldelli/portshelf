@@ -7,6 +7,7 @@
   import Disc from "$lib/Disc.svelte";
   import ConsoleIcon from "$lib/ConsoleIcon.svelte";
   import PadGlyph from "$lib/PadGlyph.svelte";
+  import SystemLogo from "$lib/SystemLogo.svelte";
   import { applyTheme, themes, type Mode } from "$lib/themes";
   import { open } from "@tauri-apps/plugin-dialog";
   import { fade, fly, scale } from "svelte/transition";
@@ -635,7 +636,7 @@
     </section>
     {#if system}
       <div class="caption">
-        <h2>{system.info.name}</h2>
+        <h2 class="system-logo"><SystemLogo id={system.id} name={system.info.name} height={52} /></h2>
         <p>
           {system.info.year} · {system.installed} installed ·
           <button class="link inline" onclick={() => (knownFor = system!.id)}>{knownPorts(system.id).length} known</button>
@@ -660,7 +661,7 @@
     </section>
     {#if game}
       <div class="caption">
-        <p class="system-name">{system.info.name}</p>
+        <p class="system-name"><SystemLogo id={system.id} name={system.info.name} height={22} /></p>
         {#if editingName}
           <!-- svelte-ignore a11y_autofocus -->
           <input class="rename" bind:value={nameDraft} autofocus
@@ -916,7 +917,8 @@
   .caption { text-align: center; min-height: 170px; }
   .caption h2 { margin: 0; font-size: 28px; }
   .caption p { margin: 4px 0; color: var(--muted); font-size: 17px; }
-  .system-name { text-transform: uppercase; letter-spacing: 2px; font-size: 13px; }
+  .system-name { text-transform: uppercase; letter-spacing: 2px; font-size: 13px; color: var(--muted); margin-bottom: 6px !important; }
+  .system-logo { color: var(--text); margin-bottom: 8px !important; line-height: 1; }
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
   .status { color: var(--ok); }
   .title { display: inline-flex; align-items: center; gap: 8px; }

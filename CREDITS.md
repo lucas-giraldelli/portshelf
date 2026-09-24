@@ -21,6 +21,10 @@ CC BY-SA 3.0 images are shared under the same license: https://creativecommons.o
 
 `static/media/*-cartridge.png` and `static/media/*-disc.png` are label templates found on image search (the N64 shell is a photograph); their label windows and disc holes are transparent so the cover art can sit behind them. Sources: pngfind.com (SNES), pngkey.com (PS2), and a disc template by stanrebro on DeviantArt (Xbox 360); the others came without attribution.
 
+## System logos
+
+`static/logos/*.png` are single-colour masks made from logos on Wikimedia Commons, all public domain (text logos): [Nintendo 64 wordmark](https://commons.wikimedia.org/wiki/File:Nintendo_64_wordmark.svg), [Nintendo GameCube Official Logo](https://commons.wikimedia.org/wiki/File:Nintendo_GameCube_Official_Logo.svg), [Super Nintendo Entertainment System logo](https://commons.wikimedia.org/wiki/File:Super_Nintendo_Entertainment_System_logo.svg), [Game Boy Advance logo](https://commons.wikimedia.org/wiki/File:Game_Boy_Advance_logo.svg), [PlayStation logo and wordmark](https://commons.wikimedia.org/wiki/File:PlayStation_logo_and_wordmark.svg), [PlayStation 2 logo](https://commons.wikimedia.org/wiki/File:PlayStation_2_logo.svg), [Mega Drive (Japan) logo](https://commons.wikimedia.org/wiki/File:MegaDriveJPLogo.svg) and [Xbox 360 wordmark](https://commons.wikimedia.org/wiki/File:Xbox_360_wordmark.svg). The trademarks belong to their owners.
+
 ## Fonts
 
 Both under the SIL Open Font License 1.1, Latin subsets from Google Fonts:
