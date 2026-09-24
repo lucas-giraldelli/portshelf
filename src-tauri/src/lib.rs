@@ -226,6 +226,7 @@ fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
         if let Some(w) = window {
             let _ = w.show();
             let _ = w.set_focus();
+            gamepad::ACTIVE.store(true, std::sync::atomic::Ordering::Relaxed);
         }
     });
     Ok(())
@@ -347,6 +348,12 @@ fn unlock_cover(id: String) -> Result<(), String> {
     save_library(&lib)
 }
 
+/// Closes the shelf (Esc twice on the systems screen).
+#[tauri::command]
+fn quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 /// Hides the pointer while a controller is in use (the CSS cursor only updates on the next mouse move).
 #[tauri::command]
 fn set_cursor_visible(window: tauri::WebviewWindow, visible: bool) -> Result<(), String> {
@@ -466,7 +473,12 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit])
+        .on_window_event(|_, event| {
+            if let tauri::WindowEvent::Focused(focused) = event {
+                gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

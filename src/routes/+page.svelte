@@ -260,10 +260,19 @@
     gameIndex = 0;
   }
 
+  // Back from the systems screen asks once, then quits on the second press.
+  let quitArmed = $state(false);
+  let quitTimer: ReturnType<typeof setTimeout> | undefined;
   function back() {
     if (knownFor) knownFor = null;
     else if (settingsOpen) settingsOpen = false;
     else if (view === "games") view = "systems";
+    else if (quitArmed) invoke("quit");
+    else {
+      quitArmed = true;
+      clearTimeout(quitTimer);
+      quitTimer = setTimeout(() => (quitArmed = false), 2500);
+    }
   }
 
   async function play(port: Port) {
@@ -460,9 +469,13 @@
   {/if}
   </div>
 
+  {#if quitArmed}
+    <p class="quit-hint" role="status">Press {inputMode === "pad" ? "B" : "Esc"} again to quit PortShelf</p>
+  {/if}
   <footer>
     {#if inputMode === "pad"}
       {#if view === "games"}<span><PadGlyph button="east" /> Systems</span>{/if}
+      {#if view === "systems"}<span><PadGlyph button="east" /> Quit</span>{/if}
       <span><PadGlyph button="dpad" /> Browse</span>
       <span><PadGlyph button="south" /> {primaryLabel}</span>
       {#if view === "games"}<span><PadGlyph button="north" /> Settings</span>{/if}
@@ -472,6 +485,7 @@
       <span><kbd class="pad">Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
     {:else}
       {#if view === "games"}<span><kbd>Esc</kbd> Systems</span>{/if}
+      {#if view === "systems"}<span><kbd>Esc</kbd> Quit</span>{/if}
       <span><kbd>←</kbd><kbd>→</kbd> Browse</span>
       <span><kbd>Enter</kbd> {primaryLabel}</span>
       {#if view === "games"}<span><kbd>S</kbd> Settings</span>{/if}
@@ -602,13 +616,15 @@
   }
   .slot:focus-visible { outline: 2px solid #f2b04c; outline-offset: 8px; border-radius: 12px; }
 
-  /* Focused items come alive: consoles and cartridges bob, discs spin slowly. */
-  .slot.focused > :global(*) { animation: bob 2.6s ease-in-out infinite; }
-  .slot.focused :global(.disc) { animation: spin 9s linear infinite; }
-  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  /* Focused items lift smoothly (a transition, so leaving focus never snaps back), and discs
+     spin only while focused: pausing keeps their angle instead of jumping back to 0. */
+  .slot > :global(*) { transition: translate 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .slot.focused > :global(*) { translate: 0 -12px; }
+  .slot :global(.disc) { animation: spin 9s linear infinite paused; }
+  .slot.focused :global(.disc) { animation-play-state: running; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
-    .slot, .slot.focused > :global(*), .slot.focused :global(.disc) { animation: none; transition: none; }
+    .slot, .slot > :global(*), .slot :global(.disc) { animation: none; transition: none; }
   }
 
   .caption { text-align: center; min-height: 170px; }
@@ -659,6 +675,10 @@
   }
   code { font-size: 12px; color: #9b948a; }
   .muted { color: #9b948a; }
+  .quit-hint {
+    position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); margin: 0;
+    background: #2c2a33; border: 1px solid #4a4540; border-radius: 8px; padding: 8px 16px; color: #eee8df;
+  }
   .scrim { position: fixed; inset: 0; background: rgba(8, 8, 10, 0.6); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }
   .search { width: min(640px, 92vw); background: #1b1a1f; border: 1px solid #333; border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,0.6); overflow: hidden; }
   .query { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #333; background: transparent; color: inherit; font: 18px system-ui, sans-serif; padding: 16px 18px; outline: none; }

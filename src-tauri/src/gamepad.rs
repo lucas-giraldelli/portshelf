@@ -2,7 +2,12 @@
 //! the webview's Gamepad API is not always available (WebKitGTK builds without it).
 
 use gilrs::{Axis, Button, EventType, Gilrs};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+/// Whether the shelf should take controller input. Follows window focus, and is also set when
+/// the shelf comes back after a game: compositors may refuse to hand focus back on their own.
+pub static ACTIVE: AtomicBool = AtomicBool::new(true);
 use tauri::{AppHandle, Emitter, Manager};
 
 pub fn spawn(app: AppHandle) {
@@ -17,11 +22,8 @@ pub fn spawn(app: AppHandle) {
                 // Only when the shelf is the focused window: a game (or anything else) in front
                 // gets the controller alone. Controllers are read system-wide, so without this
                 // every open shelf would react.
-                let focused = app
-                    .get_webview_window("main")
-                    .and_then(|w| Some(w.is_visible().ok()? && w.is_focused().ok()?))
-                    .unwrap_or(false);
-                if !focused {
+                let visible = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false);
+                if !visible || !ACTIVE.load(Ordering::Relaxed) {
                     continue;
                 }
                 let action = match event.event {
