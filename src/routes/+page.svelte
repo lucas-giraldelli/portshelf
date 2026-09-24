@@ -21,6 +21,9 @@
   let systemIndex = $state(0);
   let gameIndex = $state(0);
   let settingsOpen = $state(false);
+  // Every port the catalog knows for one system, with links to the projects.
+  let knownFor = $state<string | null>(null);
+  const panelOpen = () => settingsOpen || knownFor !== null;
   let config = $state<Record<string, Record<string, unknown>> | null>(null);
   let configTab = $state("");
 
@@ -90,6 +93,26 @@
     }
   }
 
+  const knownPorts = (consoleId: string) =>
+    (catalog?.ports ?? []).filter((p) => p.console === consoleId).sort((a, b) => Number(isInstalled(b.id)) - Number(isInstalled(a.id)) || displayName(a).localeCompare(displayName(b)));
+  const host = (url: string) => {
+    try {
+      const u = new URL(url);
+      return u.hostname === "github.com" ? `github.com/${u.pathname.split("/").slice(1, 3).join("/")}` : u.hostname.replace(/^www\./, "");
+    } catch {
+      return url;
+    }
+  };
+
+  /** Jump from the list to the port on the shelf (showing every port if it is not installed). */
+  function showOnShelf(port: Port) {
+    if (!isInstalled(port.id)) showAll = true;
+    knownFor = null;
+    systemIndex = Math.max(0, systems.findIndex((s) => s.id === port.console));
+    gameIndex = Math.max(0, systems[systemIndex]?.ports.findIndex((p) => p.id === port.id) ?? 0);
+    view = "games";
+  }
+
   function flash(message: string) {
     status = message;
     setTimeout(() => (status = ""), 3000);
@@ -156,7 +179,7 @@
   }
 
   function move(delta: number) {
-    if (settingsOpen) return;
+    if (panelOpen()) return;
     if (view === "systems") systemIndex = wrap(systemIndex + delta, systems.length);
     else if (system) gameIndex = clamp(gameIndex + delta, system.ports.length);
   }
@@ -164,7 +187,7 @@
   const wrap = (i: number, n: number) => (n ? ((i % n) + n) % n : 0);
 
   async function confirm() {
-    if (settingsOpen) return;
+    if (panelOpen()) return;
     if (view === "systems") {
       if (!system) return;
       view = "games";
@@ -177,14 +200,15 @@
   }
 
   function toggleAll() {
-    if (settingsOpen) return;
+    if (panelOpen()) return;
     showAll = !showAll;
     systemIndex = clamp(systemIndex, systems.length);
     gameIndex = 0;
   }
 
   function back() {
-    if (settingsOpen) settingsOpen = false;
+    if (knownFor) knownFor = null;
+    else if (settingsOpen) settingsOpen = false;
     else if (view === "games") view = "systems";
   }
 
@@ -223,7 +247,7 @@
     if (e.target instanceof HTMLInputElement || editingName) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
-      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, Tab: toggleAll, r: () => view === "games" && startRename(),
+      Enter: confirm, " ": confirm, Escape: back, Backspace: back, s: openSettings, Tab: toggleAll, k: () => system && !panelOpen() && (knownFor = system.id), r: () => view === "games" && startRename(),
     };
     const action = actions[e.key];
     if (action) {
@@ -299,7 +323,10 @@
     {#if system}
       <div class="caption">
         <h2>{system.info.name}</h2>
-        <p>{system.info.year} · {system.installed} installed{showAll ? ` · ${system.ports.length} known` : ""}</p>
+        <p>
+          {system.info.year} · {system.installed} installed ·
+          <button class="link inline" onclick={() => (knownFor = system!.id)}>{knownPorts(system.id).length} known</button>
+        </p>
       </div>
     {/if}
    </div>
@@ -368,9 +395,32 @@
     <span><kbd>Enter</kbd> / <kbd>A</kbd> {view === "systems" ? "Open" : game && isInstalled(game.id) && !romReady(game.id) ? "Select game file" : "Play"}</span>
     {#if view === "games"}<span><kbd>S</kbd> / <kbd>Y</kbd> Settings</span>{/if}
     {#if view === "games"}<span><kbd>R</kbd> Rename</span>{/if}
+    <span><kbd>K</kbd> Known ports</span>
     <span><kbd>Tab</kbd> / <kbd>Select</kbd> {showAll ? "Installed only" : "Every known port"}</span>
   </footer>
 </main>
+
+{#if knownFor && catalog}
+  <aside aria-label="Known {catalog.consoles[knownFor].name} ports">
+    <button class="close ghost" onclick={() => (knownFor = null)} aria-label="Close">×</button>
+    <h2>{catalog.consoles[knownFor].name}</h2>
+    <p class="muted">Every port portshelf knows about for this system. Links go to each project's page.</p>
+    <ul class="known">
+      {#each knownPorts(knownFor) as port (port.id)}
+        <li>
+          <button class="thumb" onclick={() => showOnShelf(port)} aria-label="Show {displayName(port)} on the shelf">
+            {#if covers[port.id]}<img src={covers[port.id]} alt="" />{/if}
+          </button>
+          <div class="info">
+            <button class="name" onclick={() => showOnShelf(port)}>{displayName(port)}</button>
+            <span class="meta">{kindLabel[port.kind]}{#if isInstalled(port.id)} · <span class="installed">installed</span>{/if}</span>
+            <button class="link" onclick={() => openUrl(port.repo)}>{host(port.repo)} ↗</button>
+          </div>
+        </li>
+      {/each}
+    </ul>
+  </aside>
+{/if}
 
 {#if settingsOpen && config && game}
   <aside aria-label="{game.name} settings">
@@ -491,4 +541,15 @@
   }
   code { font-size: 12px; color: #9b948a; }
   .muted { color: #9b948a; }
+  .link.inline { font-size: inherit; padding: 0; color: #d6cec2; }
+  .known { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
+  .known li { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 8px; background: #222127; }
+  .thumb { width: 64px; height: 46px; flex: none; padding: 0; border: 0; border-radius: 4px; overflow: hidden; background: #2d2c33; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+  .info .name { background: none; border: 0; padding: 0; font-weight: 600; text-align: left; }
+  .info .name:hover, .info .name:focus-visible { color: #f2b04c; }
+  .info .meta { font-size: 12px; color: #9b948a; }
+  .info .installed { color: #9fd48b; }
+  .info .link { padding: 0; font-size: 12px; }
 </style>
