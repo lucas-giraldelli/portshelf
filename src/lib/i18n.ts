@@ -8,6 +8,8 @@ export const languages: Record<Lang, string> = { en: "English", "pt-BR": "Portug
 const en = {
   // header
   "header.addPort": "Add port +",
+  "header.fullscreen": "Fullscreen (F11)",
+  "header.leaveFullscreen": "Leave fullscreen (F11)",
   "header.theme": "Theme",
   "header.language": "Language",
   "header.toLight": "Switch to light mode",
@@ -159,6 +161,8 @@ export type Key = keyof typeof en;
 
 const ptBR: Record<Key, string> = {
   "header.addPort": "Adicionar port +",
+  "header.fullscreen": "Tela cheia (F11)",
+  "header.leaveFullscreen": "Sair da tela cheia (F11)",
   "header.theme": "Tema",
   "header.language": "Idioma",
   "header.toLight": "Mudar para o modo claro",

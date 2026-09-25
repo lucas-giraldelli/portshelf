@@ -37,7 +37,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Add port | P | |
 | PortShelf settings | O | North face button (systems screen) |
 | Next theme / light or dark mode | T / M | |
-| Fullscreen or window | F11 | |
+| Fullscreen or window (also the button next to the settings gear) | F11 | |
 | English or Brazilian Portuguese | L | |
 | Choose a game file for the system in view | I | |
 | Search every system | Ctrl+F | Start |
