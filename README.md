@@ -10,22 +10,18 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 ## Features
 
-- 67 known ports on eleven systems (Arcade, NES, Mega Drive, Super Nintendo, PlayStation, Nintendo 64, PlayStation 2, Game Boy Advance, GameCube, Xbox 360 and Wii). Every port needs the player's own game file: complete fan games and remakes that bundle the game's assets are not listed. The Game Boy is set up and appears once a port of that kind exists
-- Two-level carousel: systems ordered by release year and wrapping around, then the ports on each system; browse with the keyboard, a controller, by dragging with the mouse or with the mouse wheel
-- Keyboard, mouse and controller navigation across the whole app; the key hints at the bottom follow the last input device used, and the pointer hides while a controller is in use
-- Installs ports from their projects' latest GitHub or GitLab release (zip, tar.gz or AppImage, nested archives included; projects that only publish pre-releases get their newest one) into `~/.local/share/PortShelf/ports/<port id>/`; only the port is downloaded, the game file always comes from the user
-- Ports open on their own launcher with the game file already in place; the shelf hides while a game runs and returns when it exits
-- Time played per game, shown with the day it was last played. On Linux each port runs in its own systemd scope, so the time counts until every process of the game has exited, including those its launcher starts; sessions shorter than 15 seconds are not counted
-- A game file is required before a port can start; it is set up the way each port expects (a big-endian copy for recompilation ports, the file path for Dusklight, a link next to the executable for Harbour Masters ports). Every port lists the release of the game it needs, and files of another release are named and refused instead of failing when the game starts. Zip and 7z archives can be picked directly; PortShelf unpacks the game file into the game's folder
-- ROM folder: chosen once, it gets a folder per game (`<system>/<game>/`, for example `n64/chameleon_twist/`). A file placed in a game's folder is used for that game; files anywhere else in the ROM folder are identified by the game code stored in them (N64 cartridge header; GameCube disc header, also inside RVZ and WIA images) or by their No-Intro or Redump name, and copies that look modified are skipped, since ports need the original game. The settings dialog shows, per system, how many installed ports have their game file, with a file chooser that opens in that system's folder; the picked file goes to the game whose folder it is in (or the one its game code identifies). PortShelf picks up new ports and game files on start and whenever its window comes back into focus; files for ports not installed yet are set up when the port is installed
-- Settings editor for ports that store their options as JSON (the RecompFrontend family)
-- Cover art found automatically, with manual cover choice, renaming and online search per game
-- Settings dialog (gear button, O, or the north face button on the systems screen): four colour themes (Arcade, Console, Phosphor, Pop) each with a light and a dark mode, language, the ROM folder with each system's status and a file chooser per system, and Add port
-- Add port: pick the program of a port installed outside PortShelf; it guesses which catalog port it is from the file and folder names (for example `BM64Recompiled` is Bomberman 64), and anything else can be added as a new port with its own name and system. Ports made only for another operating system are marked as such
-- Interface in English and Brazilian Portuguese (follows the system language, changeable in settings)
-- Search across every system
-- A list of every known port for a system, with links to each project
-- Cartridge and disc templates per system, with the cover shown whole inside the label area and per-game cartridge colours
+- 67 ports across eleven systems, from Arcade and NES to Xbox 360 and Wii
+- Browse systems, then games, with the keyboard, a controller or the mouse
+- Installs ports from their GitHub or GitLab releases
+- Opens each port on its own launcher, with the game file already in place
+- Records your time played
+- Checks that your game file is the release each port needs, including zip and 7z archives
+- Organises your ROM folder by system and game, and picks up new files on its own
+- Edits the settings of RecompFrontend ports
+- Finds cover art automatically; covers and names can be changed per game
+- Search across every system and a list of every known port with links to each project
+- Four colour themes, each with a light and a dark mode
+- English and Brazilian Portuguese
 
 ## Controls
 
