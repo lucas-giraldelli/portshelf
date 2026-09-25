@@ -99,6 +99,7 @@ pub fn run() {
             overlay::set_overlay_style,
             overlay::preview_overlay,
             achievements::get_achievements,
+            achievements::get_achievement_summary,
         ])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {

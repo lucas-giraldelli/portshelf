@@ -51,9 +51,17 @@ fn in_scope(cmd: &Command, unit: &str) -> Option<Command> {
 
 /// Starts the port and hides the shelf while it runs; the shelf comes back when the
 /// game exits. The game is its own process, so closing the shelf does not stop it.
+/// With the shelf in fullscreen, ports whose window mode PortShelf knows start in
+/// fullscreen too; a windowed shelf leaves the port's own choice alone.
 #[tauri::command]
-pub fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
+pub fn launch(app: tauri::AppHandle, id: String, fullscreen: Option<bool>) -> Result<(), String> {
     let install = library::installed(&id)?;
+    if fullscreen == Some(true) {
+        let recomp_frontend = crate::catalog::port(&id).is_ok_and(|p| p["config"]["format"] == "recompfrontend");
+        if recomp_frontend && port_settings::config_file(&install, "graphics").is_some_and(|f| f.exists()) {
+            let _ = port_settings::set_config(id.clone(), "graphics".into(), "wm_option".into(), "Fullscreen".into());
+        }
+    }
     if let Some(boot) = &install.boot_setting {
         port_settings::set_config(id.clone(), boot.file.clone(), boot.key.clone(), boot.value.clone())?;
     }

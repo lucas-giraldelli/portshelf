@@ -40,6 +40,8 @@ pub fn spawn(app: AppHandle) {
                         Button::Start => Some("start"),
                         Button::LeftTrigger => Some("lb"),
                         Button::RightTrigger => Some("rb"),
+                        Button::LeftTrigger2 => Some("lt"),
+                        Button::RightTrigger2 => Some("rt"),
                         _ => None,
                     },
                     EventType::AxisChanged(Axis::LeftStickX, value, _) => {

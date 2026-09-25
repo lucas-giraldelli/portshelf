@@ -1,7 +1,7 @@
 <script lang="ts">
   // A port's own settings files, one tab per file, edited in place.
   import { invoke } from "@tauri-apps/api/core";
-  import SidePanel from "$lib/components/ui/SidePanel.svelte";
+  import Modal from "$lib/components/ui/Modal.svelte";
   import { tr } from "$lib/prefs.svelte";
   import { shelf } from "$lib/shelf.svelte";
   import type { Port } from "$lib/types";
@@ -43,7 +43,7 @@
   const pretty = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 </script>
 
-<SidePanel title={port.name} label={tr("settings.aria", { name: shelf.displayName(port) })} {onclose}>
+<Modal title={port.name} label={tr("settings.aria", { name: shelf.displayName(port) })} {onclose}>
   {#if config && tabs.length}
     <div class="tabs" role="tablist">
       {#each tabs as t (t)}
@@ -69,7 +69,7 @@
   {:else if config}
     <p class="muted">{tr("settings.none")}</p>
   {/if}
-</SidePanel>
+</Modal>
 
 <style>
   .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }

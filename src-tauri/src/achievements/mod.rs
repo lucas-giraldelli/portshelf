@@ -169,6 +169,39 @@ pub fn get_achievements(port: String) -> Vec<AchievementStatus> {
         .unwrap_or_default()
 }
 
+/// Progress of one port's set, for the shelf's achievements overview.
+#[derive(Serialize)]
+pub struct Summary {
+    port: String,
+    unlocked: usize,
+    total: usize,
+    points: u32,
+    total_points: u32,
+    /// Unix time of the latest unlock.
+    last: Option<u64>,
+}
+
+/// Every port with an achievement set and how far the player is in it.
+#[tauri::command]
+pub fn get_achievement_summary() -> Vec<Summary> {
+    let unlocked = load_unlocked();
+    SETS.iter()
+        .filter_map(|(id, _)| set_for(id))
+        .map(|set| {
+            let times = unlocked.get(&set.port);
+            let got: Vec<&Achievement> = set.achievements.iter().filter(|a| times.is_some_and(|t| t.contains_key(&a.id))).collect();
+            Summary {
+                port: set.port.clone(),
+                unlocked: got.len(),
+                total: set.achievements.len(),
+                points: got.iter().map(|a| a.points).sum(),
+                total_points: set.achievements.iter().map(|a| a.points).sum(),
+                last: times.and_then(|t| t.values().max().copied()),
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -13,8 +13,9 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - 67 ports across eleven systems, from Arcade and NES to Xbox 360 and Wii
 - Browse systems, then games, with the keyboard, a controller or the mouse
 - Installs ports from their GitHub or GitLab releases
-- Opens each port on its own launcher, with the game file already in place
+- Opens each port on its own launcher, with the game file already in place, and in fullscreen when the shelf is
 - Records your time played
+- Its own achievements for some ports, checked against the game's memory while it runs and shown as a card over the game in the shelf's theme; a trophy screen adds up your points
 - Checks that your game file is the release each port needs, including zip and 7z archives
 - Organises your ROM folder by system and game, and picks up new files on its own
 - Edits the settings of RecompFrontend ports
@@ -31,13 +32,14 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Open system / play | Enter | South face button (Xbox A, PlayStation Cross) |
 | Back | Esc | East face button (Xbox B, PlayStation Circle) |
 | Quit (from the systems screen, then confirm) | Esc | East face button |
-| Port settings (games screen) | S | North face button (Xbox Y, PlayStation Triangle) |
+| Achievements: the game in view, or every game's points on the systems screen (also the trophy button) | C | North face button (Xbox Y, PlayStation Triangle) |
+| Port settings (games screen) | S | L2 |
 | Known ports of the system | K | West face button (Xbox X, PlayStation Square) |
 | Rename | R | |
 | Add port | P | |
-| PortShelf settings | O | North face button (systems screen) |
+| PortShelf settings | O | L2 (systems screen) |
 | Next theme / light or dark mode | T / M | |
-| Fullscreen or window (also the button next to the settings gear) | F11 | |
+| Fullscreen or window (also the button next to the settings gear) | F11 | R2 |
 | English or Brazilian Portuguese | L | |
 | Choose a game file for the system in view | I | |
 | Search every system | Ctrl+F | Start |

@@ -6,6 +6,7 @@
   import { shelf } from "$lib/shelf.svelte";
   import { tr } from "$lib/prefs.svelte";
   import PlaytimeBadge from "./PlaytimeBadge.svelte";
+  import TrophyIcon from "$lib/components/ui/TrophyIcon.svelte";
   import type { Console, Port } from "$lib/types";
 
   let {
@@ -14,7 +15,9 @@
     system,
     onconfirm,
     onsettings,
-  }: { port: Port; systemId: string; system: Console; onconfirm: () => void; onsettings: () => void } = $props();
+    onachievements,
+  }: { port: Port; systemId: string; system: Console; onconfirm: () => void; onsettings: () => void; onachievements: () => void } = $props();
+  let achievements = $derived(shelf.achievements[port.id]);
 
   let installed = $derived(shelf.isInstalled(port.id));
   let ready = $derived(shelf.romReady(port.id));
@@ -80,6 +83,9 @@
     {:else}
       <button class="primary" onclick={onconfirm}>{shelf.canInstall(port) ? tr("game.install") : tr("game.getIt")}</button>
     {/if}
+    {#if achievements}
+      <button class="ghost ach" onclick={onachievements}><TrophyIcon size={18} /> {tr("ach.button", { n: achievements.unlocked, total: achievements.total })}</button>
+    {/if}
     <button class="ghost" onclick={() => openUrl(port.repo)}>{tr("game.projectPage")}</button>
   </div>
   <div class="actions small">
@@ -106,6 +112,7 @@
   .rom.needs { font-size: 14px; }
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
   .actions.small { margin-top: 6px; gap: 16px; }
+  .ach { display: inline-flex; align-items: center; gap: 6px; }
   .primary.progress {
     color: var(--on-accent); opacity: 1; cursor: progress;
     background: linear-gradient(90deg, var(--accent) var(--p), color-mix(in srgb, var(--accent) 45%, var(--surface)) var(--p));

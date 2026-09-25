@@ -11,14 +11,13 @@
 <footer class="hints">
   {#if pad}
     <span><PadGlyph button="east" /> {games ? tr("footer.systems") : tr("footer.quit")}</span>
-    {#if !games}<span><PadGlyph button="north" /> {tr("footer.options")}</span>{/if}
     <span><PadGlyph button="dpad" /> {tr("footer.browse")}</span>
     <span><PadGlyph button="south" /> {primary}</span>
-    {#if games}
-      <span><PadGlyph button="north" /> {tr("footer.settings")}</span>
-      <span><kbd class="pad">LB</kbd><kbd class="pad">RB</kbd> {tr("footer.system")}</span>
-    {/if}
+    <span><PadGlyph button="north" /> {tr("footer.achievements")}</span>
     <span><PadGlyph button="west" /> {tr("footer.known")}</span>
+    <span><kbd class="pad">L2</kbd> {games ? tr("footer.settings") : tr("footer.options")}</span>
+    <span><kbd class="pad">R2</kbd> {tr("footer.fullscreen")}</span>
+    {#if games}<span><kbd class="pad">LB</kbd><kbd class="pad">RB</kbd> {tr("footer.system")}</span>{/if}
     <span><kbd class="pad">Start</kbd> {tr("footer.search")}</span>
     <span><kbd class="pad">Select</kbd> {toggle}</span>
   {:else}
@@ -30,6 +29,7 @@
       <span><kbd>S</kbd> {tr("footer.settings")}</span>
       <span><kbd>R</kbd> {tr("footer.rename")}</span>
     {/if}
+    <span><kbd>C</kbd> {tr("footer.achievements")}</span>
     <span><kbd>K</kbd> {tr("footer.known")}</span>
     <span><kbd>Ctrl</kbd><kbd>F</kbd> {tr("footer.search")}</span>
     <span><kbd>Tab</kbd> {toggle}</span>

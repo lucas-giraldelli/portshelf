@@ -5,7 +5,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { tr } from "$lib/prefs.svelte";
+import { prefs, tr } from "$lib/prefs.svelte";
+import type { Summary } from "$lib/achievements";
 import type { Key } from "$lib/i18n";
 import type { Catalog, Library, Port, RomStatus } from "$lib/types";
 import type { Playtime } from "$lib/playtime";
@@ -43,6 +44,8 @@ class Shelf {
   installing = $state<Record<string, InstallProgress>>({});
   /** Time played per port. */
   playtime = $state<Record<string, Playtime>>({});
+  /** Achievement progress per port that has a set. */
+  achievements = $state<Record<string, Summary>>({});
   romSummary = $state<RomSummary | null>(null);
   syncing = $state(false);
   os = $state("linux");
@@ -52,7 +55,10 @@ class Shelf {
   constructor() {
     invoke<string>("platform").then((p) => (this.os = p));
     // A game closed: its session was just added to the time played.
-    listen<string>("game-exited", () => this.loadPlaytime());
+    listen<string>("game-exited", () => {
+      this.loadPlaytime();
+      this.loadAchievements();
+    });
     listen<InstallProgress & { id: string }>("install-progress", (e) => {
       this.installing[e.payload.id] = e.payload;
     });
@@ -113,6 +119,7 @@ class Shelf {
       this.catalog = await invoke<Catalog>("get_catalog");
       this.library = await invoke<Library>("get_library");
       this.loadPlaytime();
+      this.loadAchievements();
       await Promise.all(this.catalog.ports.map((port) => this.loadCover(port.id)));
       this.scrapeMissing();
       await this.syncRoms();
@@ -124,6 +131,11 @@ class Shelf {
 
   async loadPlaytime() {
     this.playtime = await invoke<Record<string, Playtime>>("get_playtime").catch(() => ({}));
+  }
+
+  async loadAchievements() {
+    const list = await invoke<Summary[]>("get_achievement_summary").catch(() => []);
+    this.achievements = Object.fromEntries(list.map((s) => [s.port, s]));
   }
 
   private lastRefresh = 0;
@@ -320,7 +332,7 @@ class Shelf {
   async play(port: Port) {
     leaveForGame();
     try {
-      await invoke("launch", { id: port.id });
+      await invoke("launch", { id: port.id, fullscreen: prefs.fullscreen });
       this.flash(tr("msg.started", { name: this.displayName(port) }));
     } catch (e) {
       cancelLeave();

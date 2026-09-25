@@ -20,8 +20,10 @@
   import SettingsDialog from "$lib/components/dialogs/SettingsDialog.svelte";
   import AddPortDialog from "$lib/components/dialogs/AddPortDialog.svelte";
   import SearchDialog from "$lib/components/dialogs/SearchDialog.svelte";
-  import KnownPortsPanel from "$lib/components/panels/KnownPortsPanel.svelte";
-  import PortSettingsPanel from "$lib/components/panels/PortSettingsPanel.svelte";
+  import KnownPortsDialog from "$lib/components/dialogs/KnownPortsDialog.svelte";
+  import PortSettingsDialog from "$lib/components/dialogs/PortSettingsDialog.svelte";
+  import AchievementsDialog from "$lib/components/dialogs/AchievementsDialog.svelte";
+  import TrophiesDialog from "$lib/components/dialogs/TrophiesDialog.svelte";
   import { nextTheme, prefs, tr } from "$lib/prefs.svelte";
   import { shelf } from "$lib/shelf.svelte";
   import { startFullscreenSync, toggleFullscreen } from "$lib/fullscreen";
@@ -73,7 +75,9 @@
     | { kind: "add"; exec: string }
     | { kind: "search" }
     | { kind: "known"; console: string }
-    | { kind: "port"; port: Port };
+    | { kind: "port"; port: Port }
+    | { kind: "achievements"; port: Port }
+    | { kind: "trophies" };
   let overlay = $state<Overlay | null>(null);
   /** The open dialog's own key and controller handling, when it has any. */
   let overlayRef = $state<{ handleKey?: (e: KeyboardEvent) => boolean; handlePad?: (action: string) => boolean }>();
@@ -93,6 +97,16 @@
     overlay = null;
     const port = shelf.portById(id);
     if (port) showOnShelf(port);
+  }
+  /** Achievements: the game in view when it has a set, otherwise every game's points. */
+  function openAchievements() {
+    if (view === "games" && game && shelf.achievements[game.id]) openOverlay({ kind: "achievements", port: game });
+    else openOverlay({ kind: "trophies" });
+  }
+  /** Settings: the game's own in the games view, PortShelf's on the systems screen. */
+  function openContextSettings() {
+    if (view === "games" && game && shelf.isInstalled(game.id)) openPortSettings();
+    else openOverlay({ kind: "settings" });
   }
   function openPortSettings() {
     if (view === "games" && game && shelf.isInstalled(game.id)) openOverlay({ kind: "port", port: game });
@@ -194,6 +208,7 @@
       s: openPortSettings, r: () => view === "games" && caption?.startRename(),
       i: () => shelf.chooseSystemFile(system?.id), p: startAddPort,
       o: () => openOverlay({ kind: "settings" }), k: () => system && openOverlay({ kind: "known", console: system.id }),
+      c: openAchievements,
       t: () => shelf.flash(tr("msg.theme", { name: nextTheme() })),
       m: () => (prefs.mode = prefs.mode === "dark" ? "light" : "dark"),
       l: () => (prefs.lang = prefs.lang === "en" ? "pt-BR" : "en"),
@@ -216,8 +231,10 @@
     }
     const actions: Record<string, () => void> = {
       left: () => move(-1), right: () => move(1), a: confirm, b: back,
-      y: () => (view === "systems" ? openOverlay({ kind: "settings" }) : openPortSettings()),
+      y: openAchievements,
       x: () => system && openOverlay({ kind: "known", console: system.id }),
+      lt: openContextSettings,
+      rt: toggleFullscreen,
       select: toggleAll, start: () => openOverlay({ kind: "search" }),
       lb: () => switchSystem(-1), rb: () => switchSystem(1),
     };
@@ -237,7 +254,7 @@
 <svelte:window onkeydown={onKey} onmousedown={() => (inputMode = "keys")} onmousemove={(e) => { if (e.movementX || e.movementY) inputMode = "keys"; }} />
 
 <main style="--system: {system?.info.color ?? 'var(--accent)'}">
-  <Header onsettings={() => openOverlay({ kind: "settings" })} />
+  <Header onsettings={() => openOverlay({ kind: "settings" })} ontrophies={() => openOverlay({ kind: "trophies" })} />
 
   {#if shelf.error}
     <p class="error" role="alert">{shelf.error} <button class="ghost" onclick={() => (shelf.error = "")}>{tr("common.dismiss")}</button></p>
@@ -272,7 +289,7 @@
           {/snippet}
         </Carousel>
         {#if game}
-          <GameCaption bind:this={caption} port={game} systemId={system.id} system={system.info} onconfirm={confirm} onsettings={openPortSettings} />
+          <GameCaption bind:this={caption} port={game} systemId={system.id} system={system.info} onconfirm={confirm} onsettings={openPortSettings} onachievements={() => game && openOverlay({ kind: "achievements", port: game })} />
         {/if}
       </div>
     {/if}
@@ -290,9 +307,13 @@
 {:else if overlay?.kind === "search" && shelf.catalog}
   <SearchDialog bind:this={overlayRef} onclose={close} onpick={showOnShelf} />
 {:else if overlay?.kind === "known" && shelf.catalog}
-  <KnownPortsPanel consoleId={overlay.console} onclose={close} onshow={showOnShelf} />
+  <KnownPortsDialog consoleId={overlay.console} onclose={close} onshow={showOnShelf} />
 {:else if overlay?.kind === "port"}
-  <PortSettingsPanel bind:this={overlayRef} port={overlay.port} onclose={close} />
+  <PortSettingsDialog bind:this={overlayRef} port={overlay.port} onclose={close} />
+{:else if overlay?.kind === "achievements"}
+  <AchievementsDialog port={overlay.port} onclose={close} />
+{:else if overlay?.kind === "trophies" && shelf.catalog}
+  <TrophiesDialog onclose={close} onopen={(port) => (overlay = { kind: "achievements", port })} />
 {/if}
 
 <style>
