@@ -2,7 +2,7 @@
   // Console hardware: a photo when one is bundled (static/consoles, see CREDITS.md),
   // otherwise a stylised SVG drawn at a 200x160 viewBox.
   let { id, size = 200 }: { id: string; size?: number } = $props();
-  const photos = new Set(["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360"]);
+  const photos = new Set(["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360", "nes", "gb", "wii", "arcade"]);
 </script>
 
 {#if photos.has(id)}

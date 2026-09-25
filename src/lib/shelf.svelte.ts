@@ -13,8 +13,17 @@ import type { Playtime } from "$lib/playtime";
 export type InstallProgress = { stage: string; done: number; total: number | null };
 export type RomSummary = { ready: number; installed: number; assigned: number };
 
-const MEDIA = ["n64-cartridge", "snes-cartridge", "gba-cartridge", "md-cartridge", "gc-disc", "ps1-disc", "ps2-disc", "x360-disc"];
-const CONSOLES = ["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360"];
+const MEDIA = ["n64-cartridge", "snes-cartridge", "gba-cartridge", "md-cartridge", "nes-cartridge", "gb-cartridge", "arcade-cartridge", "gc-disc", "ps1-disc", "ps2-disc", "x360-disc", "wii-disc"];
+/** Game file extensions of cartridge systems, for the file chooser. */
+const FILE_TYPES: Record<string, string[]> = {
+  n64: ["z64", "n64", "v64"],
+  snes: ["sfc", "smc"],
+  gba: ["gba"],
+  md: ["md", "gen", "smd", "bin"],
+  nes: ["nes"],
+  gb: ["gb", "gbc"],
+};
+const CONSOLES = ["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360", "nes", "gb", "wii", "arcade"];
 
 // Images are decoded before they are shown; otherwise WebKit decodes each one the first time
 // it comes into the carousel and the item flickers.
@@ -250,7 +259,7 @@ class Shelf {
     const picked = await open({
       title: tr("pick.gameFile", { system: this.catalog?.consoles[port.console].name ?? "", name: this.displayName(port) }),
       defaultPath: this.roms[port.id]?.browse_dir,
-      filters: [{ name: tr("pick.gameFiles"), extensions: [...(disc ? ["iso", "rvz", "gcm", "ciso", "wbfs", "nkit.iso"] : ["z64", "n64", "v64"]), "zip", "7z"] }],
+      filters: [{ name: tr("pick.gameFiles"), extensions: [...(disc ? ["iso", "rvz", "gcm", "ciso", "wbfs", "nkit.iso", "cue", "chd"] : (FILE_TYPES[port.console] ?? ["z64", "n64", "v64"])), "zip", "7z"] }],
     });
     if (typeof picked !== "string") return;
     try {

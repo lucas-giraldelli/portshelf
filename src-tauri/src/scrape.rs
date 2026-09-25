@@ -19,6 +19,10 @@ fn repository(console: &str) -> Option<&'static str> {
         "ps2" => "Sony_-_PlayStation_2",
         "md" => "Sega_-_Mega_Drive_-_Genesis",
         "x360" => "Microsoft_-_Xbox_360",
+        "nes" => "Nintendo_-_Nintendo_Entertainment_System",
+        "gb" => "Nintendo_-_Game_Boy",
+        "wii" => "Nintendo_-_Wii",
+        "arcade" => "MAME",
         _ => return None,
     })
 }

@@ -8,7 +8,11 @@
     "ps1":  { "name": "PlayStation",  "media": "disc",      "color": "#9a9a9a", "year": 1994 },
     "ps2":  { "name": "PlayStation 2", "media": "disc",     "color": "#1b2a6b", "year": 2000 },
     "md":   { "name": "Mega Drive",   "media": "cartridge", "color": "#1a1a1a", "year": 1988 },
-    "x360": { "name": "Xbox 360",     "media": "disc",      "color": "#3a8a2a", "year": 2005 }
+    "x360": { "name": "Xbox 360",     "media": "disc",      "color": "#3a8a2a", "year": 2005 },
+    "nes":  { "name": "NES",          "media": "cartridge", "color": "#b8403a", "year": 1985 },
+    "gb":   { "name": "Game Boy",     "media": "cartridge", "color": "#8a9a3c", "year": 1989 },
+    "wii":  { "name": "Wii",          "media": "disc",      "color": "#9fb4c7", "year": 2006 },
+    "arcade": { "name": "Arcade",     "media": "cartridge", "color": "#c8327a", "year": 1978 }
   },
   "ports": [
     {"id": "dk64", "name": "Donkey Kong 64", "codes": ["NDOE"], "authors": "Rainchus, Ballaam, KillKlli, Green Bean and UmedMuzl", "title": "Donkey Kong 64", "console": "n64", "shell": "#f4c60f", "kind": "recomp", "repo": "https://github.com/Rainchus/Donkey-Kong-64-Recompiled", "config": {"format": "recompfrontend", "dir": "~/.config/DK64Recompiled"}, "game_arg": "dk64", "install": {"linux": {"asset": ["linux-x64-release", ".zip"], "exec": "DK64Recompiled"}, "recomp": {"program_id": "DK64Recompiled", "game_id": "DK64"}}, "rom": {"needs": "Donkey Kong 64 (USA)", "hashes": ["xxh3:4d876060f09b3fc5"]}},
@@ -78,6 +82,17 @@
     {"id": "pgr4", "platforms": ["windows"], "name": "Project Gotham Racing 4", "title": "Project Gotham Racing 4", "console": "x360", "kind": "recomp", "repo": "https://github.com/beatrixzy/PGR4-Recomp", "rom": {"needs": "Project Gotham Racing 4 (Xbox 360) disc image"}},
     {"id": "svr07", "platforms": ["windows"], "name": "WWE SmackDown vs. Raw 2007", "title": "WWE SmackDown vs. Raw 2007", "console": "x360", "kind": "recomp", "repo": "https://github.com/HollywoodAkeem/SVR07-Recomp", "rom": {"needs": "WWE SmackDown vs. Raw 2007 (USA) (Xbox 360) disc"}},
     {"id": "tip", "platforms": ["windows"], "name": "Viva Piñata: Trouble in Paradise", "title": "Viva Pinata - Trouble in Paradise", "console": "x360", "kind": "recomp", "repo": "https://github.com/SolarCookies/TiP-Recomp", "rom": {"needs": "Viva Piñata: Trouble in Paradise (Xbox 360) disc"}},
-    {"id": "fable2", "name": "Fable II (Fable2Recomp)", "title": "Fable II", "console": "x360", "kind": "recomp", "repo": "https://github.com/Fable2Recomp/Fable2Recomp", "rom": {"needs": "Fable II (Xbox 360) disc image"}}
+    {"id": "fable2", "name": "Fable II (Fable2Recomp)", "title": "Fable II", "console": "x360", "kind": "recomp", "repo": "https://github.com/Fable2Recomp/Fable2Recomp", "rom": {"needs": "Fable II (Xbox 360) disc image"}},
+
+    {"id": "smb-remastered", "name": "Super Mario Bros. Remastered", "title": "Super Mario Bros.", "console": "nes", "kind": "remake", "repo": "https://github.com/JHDev2006/Super-Mario-Bros.-Remastered-Public", "install": {"linux": {"asset": ["linux.zip"]}}, "rom": {"needs": "Super Mario Bros. (World)"}},
+    {"id": "smb-c", "name": "Super Mario Bros. (SuperMarioBros-C)", "title": "Super Mario Bros.", "console": "nes", "kind": "decomp", "repo": "https://github.com/MitchellSternke/SuperMarioBros-C", "rom": {"needs": "Super Mario Bros. (World)"}},
+    {"id": "metroid-planets", "name": "Metroid Planets", "title": "Metroid", "console": "nes", "kind": "remake", "repo": "https://forum.metroidconstruction.com/index.php/topic,4952.0.html"},
+    {"id": "zelda-classic", "name": "The Legend of Zelda (ZQuest Classic)", "title": "Legend of Zelda, The", "console": "nes", "kind": "remake", "repo": "https://zquestclassic.com/"},
+    {"id": "suicune", "name": "Pokémon Crystal (suiCune)", "title": "Pokemon - Crystal Version", "console": "gb", "kind": "decomp", "repo": "https://github.com/DanZC/suiCune", "rom": {"needs": "Pokemon - Crystal Version (USA, Europe)"}},
+    {"id": "kirby-rtdl", "name": "Kirby's Return to Dream Land", "title": "Kirby's Return to Dream Land", "console": "wii", "kind": "recomp", "repo": "https://github.com/ExpansionPak/ModernGekko", "install": {"linux": {"asset": ["linux-x86_64.zip"]}}, "rom": {"needs": "Kirby's Return to Dream Land (USA), Wii disc image"}},
+    {"id": "mkwii", "name": "Mario Kart Wii (WiiCompiled)", "title": "Mario Kart Wii", "console": "wii", "kind": "recomp", "repo": "https://github.com/patchzyy/wiicompiled", "install": {"linux": {"asset": ["setup-x86_64.appimage"]}}, "rom": {"needs": "Mario Kart Wii (Europe) (RMCP01), Wii disc image"}},
+    {"id": "cannonball", "name": "OutRun (Cannonball)", "title": "Out Run", "console": "arcade", "kind": "decomp", "repo": "https://github.com/djyt/cannonball", "rom": {"needs": "OutRun (Revision B) arcade ROM set"}},
+    {"id": "projectr", "name": "San Francisco Rush (ProjectR)", "title": "San Francisco Rush - The Rock", "console": "arcade", "kind": "decomp", "repo": "https://t3hd0gg.com/project-r/", "rom": {"needs": "San Francisco Rush: The Rock or Rush 2049 arcade files"}},
+    {"id": "3sx", "name": "Street Fighter III: 3rd Strike (3SX)", "title": "Street Fighter III - 3rd Strike", "console": "ps2", "kind": "decomp", "repo": "https://github.com/crowded-street/3sx", "install": {"linux": {"asset": ["linux-x86_64.tar.gz"]}}, "rom": {"needs": "Street Fighter III: 3rd Strike or Street Fighter Anniversary Collection, PlayStation 2 disc"}}
   ]
 }

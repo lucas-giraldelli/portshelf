@@ -37,6 +37,8 @@ fn console_of(path: &Path) -> Option<&'static str> {
         "iso" => "iso", // GameCube or PlayStation 2: decided by the header
         "sfc" | "smc" => "snes",
         "gba" => "gba",
+        "nes" => "nes",
+        "gb" | "gbc" => "gb",
         "md" | "gen" | "smd" => "md",
         "cue" | "chd" => "ps1",
         _ => return None,
@@ -276,7 +278,9 @@ pub fn scan(dir: &Path, catalog: &Value) -> Vec<Found> {
         let file_name = normalize(stem.rsplit_once('.').map(|(s, _)| s).unwrap_or(&stem));
         for port in &ports {
             let console = port["console"].as_str().unwrap_or_default();
-            if kind != console && !(kind == "iso" && matches!(console, "gc" | "ps2")) {
+            // Plain disc images and RVZ files can be GameCube, Wii or PS2; the header decides.
+            let disc_image = matches!(kind, "iso" | "gc") && matches!(console, "gc" | "wii" | "ps2");
+            if kind != console && !disc_image {
                 continue;
             }
             let port_codes: Vec<&str> = port["codes"].as_array().map(|c| c.iter().filter_map(|v| v.as_str()).collect()).unwrap_or_default();

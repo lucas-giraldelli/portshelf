@@ -13,6 +13,10 @@
     snes: { src: "/media/snes-cartridge.png", aspect: 786 / 507, width: 180, window: [28.0, 0.8, 37.0, 63.2] },
     gba: { src: "/media/gba-cartridge.png", aspect: 528 / 300, width: 150, window: [10.8, 22.3, 10.2, 13.3] },
     md: { src: "/media/md-cartridge.png", aspect: 840 / 547, width: 170, window: [14.7, 6.9, 14.0, 15.3] },
+    nes: { src: "/media/nes-cartridge.png", aspect: 600 / 670, width: 125, window: [40.0, 1.2, 13.5, 32.2] },
+    gb: { src: "/media/gb-cartridge.png", aspect: 570 / 650, width: 120, window: [10.5, 22.7, 10.5, 13.4] },
+    /* Arcade games: the flyer in a marquee frame. */
+    arcade: { src: "/media/arcade-cartridge.png", aspect: 600 / 800, width: 125, window: [5.4, 4.0, 5.4, 15.2] },
   };
   let info = $derived(shells[consoleId] ?? shells.n64);
 </script>
