@@ -112,6 +112,14 @@ Programs started from the AppImage (ports and the file manager) get a clean envi
 
 On Linux the window has no title bar, since tiling compositors do not draw one and GTK would add its own buttons; Windows and macOS keep their native title bar.
 
+## Disclaimer
+
+PortShelf is an unofficial fan project. It is not affiliated with, endorsed by or sponsored by Nintendo, Sony, Microsoft, Sega or any other game company, nor by the authors of the ports it lists.
+
+PortShelf does not include, download or distribute games, ROMs, disc images, BIOS files or any other copyrighted game data. It only downloads the ports themselves, from their projects' public releases, and every port needs a copy of the game supplied by the player. Use only game files you are legally entitled to use, such as dumps of games you own.
+
+Each port is a separate project under its own license, and its authors are responsible for it. Game titles, console names, logos and cover art belong to their respective owners and are shown only to identify the games and systems.
+
 ## Credits
 
 Built with [Tauri](https://tauri.app) and [Svelte](https://svelte.dev). Console photographs by Evan-Amos and others on Wikimedia Commons; see [CREDITS.md](CREDITS.md) for every image source and license.
