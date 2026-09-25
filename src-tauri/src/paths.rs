@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 pub fn home() -> PathBuf {
-    PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/".into()))
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/".into())))
 }
 
 /// A path from the catalog or the library, with `~/` meaning the home folder.

@@ -104,6 +104,15 @@ pub fn rom_status(id: String, console: String) -> Result<RomStatus, String> {
     Ok(RomStatus { ready, path, browse_dir, wrong })
 }
 
+/// Puts a game file next to a port without copying it where possible: a symbolic link on
+/// Unix; on Windows, where symbolic links need extra rights, a hard link (same drive) or a copy.
+fn link_file(from: &Path, to: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(from, to).map_err(|e| e.to_string());
+    #[cfg(not(unix))]
+    return fs::hard_link(from, to).or_else(|_| fs::copy(from, to).map(|_| ())).map_err(|e| e.to_string());
+}
+
 /// Sets up the chosen game file the way the port's own launcher would.
 #[tauri::command]
 pub fn select_rom(id: String, path: String) -> Result<(), String> {
@@ -136,7 +145,7 @@ pub fn select_rom(id: String, path: String) -> Result<(), String> {
             let name = Path::new(&path).file_name().ok_or("invalid file")?;
             let link = Path::new(&dir).join(name);
             let _ = fs::remove_file(&link);
-            std::os::unix::fs::symlink(&path, &link).map_err(|e| e.to_string())
+            link_file(Path::new(&path), &link)
         }
     }
 }
