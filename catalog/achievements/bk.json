@@ -1,8 +1,10 @@
 {
   "port": "bk",
   "memory": "n64-recomp",
-  "notes": "Addresses are for the US 1.0 release, from the Banjo-Kazooie decompilation (CC0): items at 0x80385F30 (s32 per item, see item_e), collected jiggies at 0x803832C0 (one bit per jiggy: byte (id - 1) / 8, bit id & 7), current level at 0x80383301.",
+  "notes": "Addresses are for the US 1.0 release, from the Banjo-Kazooie decompilation (CC0): items at 0x80385F30 (s32 per item, see item_e), collected jiggies at 0x803832C0 (one bit per jiggy: byte (id - 1) / 8, bit id & 7), current level at 0x80383301, game mode at 0x8037E8E4 (3 normal, 4 paused; 7 is the attract demo of the title screen, which plays real levels and collects items).",
   "playing": [
+    { "read": "u32", "addr": "0x8037E8E4", "op": "ge", "value": 3 },
+    { "read": "u32", "addr": "0x8037E8E4", "op": "le", "value": 4 },
     { "read": "u8", "addr": "0x80383301", "op": "ge", "value": 1 },
     { "read": "u8", "addr": "0x80383301", "op": "le", "value": 12 }
   ],
