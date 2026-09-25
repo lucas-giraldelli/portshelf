@@ -118,7 +118,6 @@ fn detect_installed() -> BTreeMap<String, Install> {
     // Ports open on their own launcher; PortShelf only sets up the game file for them.
     let candidates: &[(&str, &str, Option<&str>)] = &[
         ("dk64", "~/Applications/DK64Recompiled/DK64Recompiled", Some("~/.config/DK64Recompiled")),
-        ("mt64", "/mnt/main/Roms/mariotennis64recomp/run/play.sh", Some("/mnt/main/Roms/mariotennis64recomp/run")),
         ("tp", "~/Applications/Dusklight.AppImage", Some("~/.local/share/TwilitRealm/Dusklight")),
         ("bm64", "~/Applications/BM64Recompiled/BM64Recompiled", Some("~/.config/BM64Recompiled")),
         // Harbour Masters ports keep their settings next to the AppImage.

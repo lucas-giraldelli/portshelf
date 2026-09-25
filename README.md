@@ -4,8 +4,6 @@
 
 PortShelf is a launcher for native PC ports of console games: static recompilations (N64: Recompiled, Xbox 360 recompilations and others), decompilation projects (Harbour Masters ports, Dusklight, OpenGOAL) and builders that produce a port from your own game file. Each system appears as its console; opening it shows its ports as cartridges or discs that can be installed, started, configured and looked up. Every port runs on your own copy of the game.
 
-**Work in progress.**
-
 ![Browsing systems and games in PortShelf](docs/portshelf.webp)
 
 ## Features
