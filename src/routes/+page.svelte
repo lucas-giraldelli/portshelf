@@ -128,17 +128,23 @@
   function move(delta: number) {
     if (overlay) return;
     if (view === "systems") systemIndex = wrap(systemIndex + delta, systems.length);
-    else if (system) gameIndex = clamp(gameIndex + delta, system.ports.length);
+    else if (system) gameIndex = wrap(gameIndex + delta, system.ports.length);
   }
   function switchSystem(delta: number) {
     if (view !== "games") return;
     systemIndex = wrap(systemIndex + delta, systems.length);
     gameIndex = 0;
   }
+  /** Installed only or every known port. The list of systems changes (systems with no
+   *  installed port appear or disappear), so the system and game in view are kept by id. */
   function toggleAll() {
+    const systemId = system?.id;
+    const gameId = game?.id;
     showAll = !showAll;
-    systemIndex = clamp(systemIndex, systems.length);
-    gameIndex = 0;
+    const s = systems.findIndex((x) => x.id === systemId);
+    systemIndex = s >= 0 ? s : clamp(systemIndex, systems.length);
+    const g = systems[systemIndex]?.ports.findIndex((p) => p.id === gameId) ?? -1;
+    gameIndex = g >= 0 ? g : 0;
   }
 
   async function confirm() {
@@ -278,7 +284,7 @@
       </div>
     {:else if system}
       <div class="view" out:fade={{ duration: 160 }}>
-        <Carousel items={system.ports} key={(p) => p.id} focused={gameIndex} spacing={440} label={system.info.name}
+        <Carousel items={system.ports} key={(p) => p.id} focused={gameIndex} spacing={440} loop label={system.info.name}
           onmove={move} onfocus={(i) => (gameIndex = i)} onactivate={confirm}>
           {#snippet item(port, i)}
             <div in:fly={{ y: 220, duration: 420, delay: 200 + Math.abs(i - gameIndex) * 70, easing: cubicOut }}>
