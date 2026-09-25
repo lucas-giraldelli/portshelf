@@ -2,7 +2,7 @@
 
 <h1 align="center">PortShelf</h1>
 
-PortShelf is a launcher for native PC ports of console games: static recompilations (N64: Recompiled and others), decompilation projects (Harbour Masters ports, Dusklight) and builders that produce a port from your own game file. Each system appears as its console; opening it shows its ports as cartridges or discs that can be started, configured and looked up.
+PortShelf is a launcher for native PC ports of console games: static recompilations (N64: Recompiled, Xbox 360 recompilations and others), decompilation projects (Harbour Masters ports, Dusklight, OpenGOAL) and builders that produce a port from your own game file. Each system appears as its console; opening it shows its ports as cartridges or discs that can be installed, started, configured and looked up. Every port runs on your own copy of the game.
 
 **Work in progress.**
 
@@ -35,11 +35,11 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Open system / play | Enter | South face button (Xbox A, PlayStation Cross) |
 | Back | Esc | East face button (Xbox B, PlayStation Circle) |
 | Quit (from the systems screen, then confirm) | Esc | East face button |
-| Settings | S | North face button (Xbox Y, PlayStation Triangle) |
+| Port settings (games screen) | S | North face button (Xbox Y, PlayStation Triangle) |
 | Known ports of the system | K | West face button (Xbox X, PlayStation Square) |
 | Rename | R | |
 | Add port | P | |
-| Settings | O | North face button (systems screen) |
+| PortShelf settings | O | North face button (systems screen) |
 | Next theme / light or dark mode | T / M | |
 | English or Brazilian Portuguese | L | |
 | Choose a game file for the system in view | I | |
@@ -56,8 +56,10 @@ Controllers are read natively with gilrs, so they work where the webview has no 
 | Ports installed by PortShelf | `~/.local/share/PortShelf/ports/<port id>/` (Windows: `%LOCALAPPDATA%\PortShelf\ports`, macOS: `~/Library/Application Support/PortShelf/ports`) |
 | Library (installed ports and how to start them) | `~/.config/portshelf/library.json` |
 | Cover art | `~/.config/portshelf/covers/<port id>.png` (replaced covers are kept in `covers/replaced/`) |
-| Cover index cache | `~/.cache/portshelf/` |
+| Time played | `~/.config/portshelf/playtime.json` |
+| Cover index, downloads and unpacked archives | `~/.cache/portshelf/` |
 | Game files | the ROM folder you choose, organised as `<system>/<game>/` |
+| Game file handed to a recompilation port | the port's own folder, `~/.config/<program_id>/<game_id>.z64` (Windows: `%LOCALAPPDATA%\<program_id>`) |
 
 The library is created on first run by scanning the usual install locations, and refreshed whenever the window comes back into focus; covers chosen by hand are kept.
 
@@ -65,9 +67,40 @@ Cover art comes from [libretro-thumbnails](https://github.com/libretro-thumbnail
 
 ## Catalog
 
-`catalog/ports.json` lists the known ports: system, kind (recompilation, decompilation, builder or remake), project page, No-Intro or Redump title, an optional cartridge colour, and an optional `install` section. The install section names, per operating system, the words that identify the release asset and the program to start, plus launch arguments, the settings folder and how the port expects its game file. `cargo run --example install -- <port id> <folder>` (in `src-tauri`) tests a rule without the interface, and `cargo run --example scan -- <folder>` shows which ports the game files in a folder match. Entries can also carry `codes` (N64 game codes such as `NDOE`, GameCube IDs such as `GZ2E`), `authors`, a `recomp` section for N64: Recompiled ports with the `program_id` and `game_id` read from each project's source (the port keeps its settings in `~/.config/<program_id>` on Linux, `%LOCALAPPDATA%\<program_id>` on Windows, and looks for the ROM there as `<game_id>.z64`, so PortShelf places the checked ROM exactly where the port's own launcher finds it), and a `rom` section naming the release of the game the port needs, with the hashes of the accepted files (`xxh3:`, `sha1:`, `md5:` or `sha256:`). The list follows the [PCGamingWiki list of unofficial ports](https://www.pcgamingwiki.com/wiki/List_of_unofficial_ports) for the systems PortShelf shows. Each system entry has its name, release year, media type and accent colour.
+`catalog/ports.json` lists the systems (name, release year, media type, accent colour) and the known ports. Each port has its system, kind (recompilation, decompilation, builder or remake), project page and No-Intro or Redump title, and can also carry:
 
-The list was put together from [PCGamingWiki's list of unofficial ports](https://www.pcgamingwiki.com/wiki/List_of_unofficial_ports) and [awesome-unofficial-pc-ports](https://github.com/Sebastrion/awesome-unofficial-pc-ports).
+- `install`: per operating system, the words that identify the release asset and the program to start, plus the settings folder and how the port expects its game file
+- `recomp`: for N64: Recompiled ports, the `program_id` and `game_id` read from each project's source. The port keeps its settings in `~/.config/<program_id>` on Linux (`%LOCALAPPDATA%\<program_id>` on Windows) and looks for the ROM there as `<game_id>.z64`, so PortShelf places the checked ROM exactly where the port's own launcher finds it
+- `rom`: the release of the game the port needs, with the hashes of the accepted files (`xxh3:`, `sha1:`, `md5:` or `sha256:`)
+- `codes` (N64 game codes such as `NDOE`, GameCube IDs such as `GZ2E`), `authors`, `platforms` for ports made only for another operating system, and a cartridge colour
+
+Only ports that need the player's own game are listed. The list was put together from [PCGamingWiki's list of unofficial ports](https://www.pcgamingwiki.com/wiki/List_of_unofficial_ports) and [awesome-unofficial-pc-ports](https://github.com/Sebastrion/awesome-unofficial-pc-ports).
+
+In `src-tauri`, `cargo run --example install -- <port id> <folder>` tests an install rule without the interface, `cargo run --example scan -- <folder>` shows which ports the game files in a folder match, and `cargo test` checks every catalog entry.
+
+## Project structure
+
+The interface (Svelte, in `src/`) runs in the app's web view; everything that touches the system (files, downloads, processes, the controller) runs in the Rust backend (`src-tauri/`). The interface calls backend commands with `invoke`, all of them from `src/lib/shelf.svelte.ts`, and the backend sends events back (`pad` for the controller, `install-progress`, `game-exited`).
+
+```
+src/
+  routes/+page.svelte       navigation, keyboard and controller, which dialog is open
+  lib/shelf.svelte.ts       shelf state and every call to the backend
+  lib/prefs.svelte.ts       theme, light or dark mode, language
+  lib/components/
+    shelf/                  carousel, captions, header, key hints
+    dialogs/  panels/       settings, add port, search, quit; known ports, port settings
+    media/                  cartridge, disc, console photo, system logo
+    ui/                     dialog and side panel frames, list rows, button glyphs
+src-tauri/src/
+  lib.rs                    registers the modules and their commands
+  catalog.rs  library.rs    the port list; the user's library
+  ports.rs                  installing ports and adding ones installed by hand
+  roms.rs                   game file status, handing files to ports, the ROM folder
+  launch.rs  playtime.rs    starting a port; time played
+  covers.rs  port_settings.rs  paths.rs
+  install.rs  romscan.rs  scrape.rs  gamepad.rs   downloads, game file identification, cover search, controller
+```
 
 ## Development
 
