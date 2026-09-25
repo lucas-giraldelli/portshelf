@@ -13,7 +13,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - Installs ports from their GitHub or GitLab releases
 - Opens each port on its own launcher, with the game file already in place, and in fullscreen when the shelf is
 - Records your time played
-- Its own achievements for some ports, checked against the game's memory while it runs and shown as a card over the game in the shelf's theme; a trophy screen adds up your points
+- Its own achievements, starting with Banjo-Kazooie
 - Checks that your game file is the release each port needs, including zip and 7z archives
 - Organises your ROM folder by system and game, and picks up new files on its own
 - Edits the settings of RecompFrontend ports
