@@ -10,7 +10,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 ## Features
 
-- Twelve systems (Arcade, NES, Mega Drive, Game Boy, Super Nintendo, PlayStation, Nintendo 64, PlayStation 2, Game Boy Advance, GameCube, Xbox 360 and Wii) with 71 known ports
+- Twelve systems (Arcade, NES, Mega Drive, Game Boy, Super Nintendo, PlayStation, Nintendo 64, PlayStation 2, Game Boy Advance, GameCube, Xbox 360 and Wii) with 72 known ports
 - Two-level carousel: systems ordered by release year and wrapping around, then the ports on each system; browse with the keyboard, a controller, by dragging with the mouse or with the mouse wheel
 - Keyboard, mouse and controller navigation across the whole app; the key hints at the bottom follow the last input device used, and the pointer hides while a controller is in use
 - Installs ports from their projects' latest GitHub or GitLab release (zip, tar.gz or AppImage, nested archives included; projects that only publish pre-releases get their newest one) into `~/.local/share/PortShelf/ports/<port id>/`; only the port is downloaded, the game file always comes from the user
