@@ -1,4 +1,4 @@
-//! Installs a port from its project's latest GitHub release: picks the asset for this
+//! Installs a port from its project's latest GitHub or GitLab release: picks the asset for this
 //! operating system, downloads it, unpacks it (zip, tar.gz, a bare AppImage, or an archive
 //! nested in the download) into its own folder, and finds the program to start.
 //! Only the port is downloaded; the game file always comes from the user.
@@ -27,46 +27,75 @@ pub enum Progress {
     Done,
 }
 
-fn github_repo(url: &str) -> Option<String> {
-    let rest = url.strip_prefix("https://github.com/")?;
+/// "owner/name" of a project on a host, from its web address.
+fn repo_path(url: &str, host: &str) -> Option<String> {
+    let rest = url.strip_prefix(&format!("https://{host}/"))?;
     let mut parts = rest.split('/');
     Some(format!("{}/{}", parts.next()?, parts.next()?))
+}
+
+fn get_json(url: &str) -> Result<serde_json::Value, String> {
+    ureq::get(url).set("User-Agent", USER_AGENT).call().map_err(|e| format!("{url}: {e}"))?.into_json().map_err(|e| e.to_string())
+}
+
+/// Tag and downloads (name, address) of the project's latest release.
+fn latest_release(repo_url: &str) -> Result<(String, Vec<(String, String)>), String> {
+    let (tag, assets): (&str, Vec<(String, String)>);
+    let release;
+    if let Some(repo) = repo_path(repo_url, "github.com") {
+        // Projects that only publish pre-releases have no "latest": take the newest one.
+        release = match get_json(&format!("https://api.github.com/repos/{repo}/releases/latest")) {
+            Ok(r) => r,
+            Err(_) => get_json(&format!("https://api.github.com/repos/{repo}/releases?per_page=1"))?
+                .get(0)
+                .cloned()
+                .ok_or_else(|| format!("{repo} has no releases"))?,
+        };
+        tag = release["tag_name"].as_str().unwrap_or("latest");
+        assets = release["assets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|a| Some((a["name"].as_str()?.to_string(), a["browser_download_url"].as_str()?.to_string())))
+            .collect();
+    } else if let Some(repo) = repo_path(repo_url, "gitlab.com") {
+        let releases = get_json(&format!("https://gitlab.com/api/v4/projects/{}/releases?per_page=1", repo.replace('/', "%2F")))?;
+        release = releases.get(0).cloned().ok_or_else(|| format!("{repo} has no releases"))?;
+        tag = release["tag_name"].as_str().unwrap_or("latest");
+        assets = release["assets"]["links"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|a| Some((a["name"].as_str()?.to_string(), a["direct_asset_url"].as_str().or(a["url"].as_str())?.to_string())))
+            .collect();
+    } else {
+        return Err("the project is not on GitHub or GitLab".into());
+    }
+    Ok((tag.to_string(), assets))
 }
 
 /// Downloads and unpacks the port into `dest`, replacing a previous install there.
 /// Returns the release tag and the program to start.
 pub fn install(repo_url: &str, rule: &Rule, dest: &Path, work: &Path, mut progress: impl FnMut(Progress)) -> Result<(String, PathBuf), String> {
-    let repo = github_repo(repo_url).ok_or("the project is not on GitHub")?;
-    let release: serde_json::Value = ureq::get(&format!("https://api.github.com/repos/{repo}/releases/latest"))
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("{repo}: {e}"))?
-        .into_json()
-        .map_err(|e| e.to_string())?;
-    let tag = release["tag_name"].as_str().unwrap_or("latest").to_string();
+    let (tag, assets) = latest_release(repo_url)?;
     let wanted: Vec<String> = rule.asset.iter().map(|w| w.to_lowercase()).collect();
     // Signatures and checksums sit next to the real files with the same words in their
     // names; skip them, and prefer the shortest name among the rest (the AppImage itself
     // over "AppImage.tar.gz").
-    let asset = release["assets"]
-        .as_array()
-        .and_then(|assets| {
-            assets
-                .iter()
-                .filter(|a| {
-                    let name = a["name"].as_str().unwrap_or_default().to_lowercase();
-                    let side_file = [".sig", ".asc", ".sha256", ".sha512", ".md5", ".json", ".txt"].iter().any(|e| name.ends_with(e));
-                    !side_file && wanted.iter().all(|w| name.contains(w.as_str()))
-                })
-                .min_by_key(|a| a["name"].as_str().unwrap_or_default().len())
+    let (name, url) = assets
+        .into_iter()
+        .filter(|(name, _)| {
+            let name = name.to_lowercase();
+            let side_file = [".sig", ".asc", ".sha256", ".sha512", ".md5", ".json", ".txt"].iter().any(|e| name.ends_with(e));
+            !side_file && wanted.iter().all(|w| name.contains(w.as_str()))
         })
-        .ok_or_else(|| format!("no download for this system in {repo} {tag}"))?;
-    let name = asset["name"].as_str().unwrap_or("download").to_string();
-    let url = asset["browser_download_url"].as_str().ok_or("asset without a download link")?;
+        .min_by_key(|(name, _)| name.len())
+        .ok_or_else(|| format!("no download for this system in {repo_url} {tag}"))?;
 
     fs::create_dir_all(work).map_err(|e| e.to_string())?;
     let file = work.join(&name);
-    download(url, &file, &mut progress)?;
+    download(&url, &file, &mut progress)?;
+    let file = with_format_extension(file)?;
 
     progress(Progress::Unpacking);
     let staging = work.join("staging");
@@ -136,6 +165,26 @@ fn download(url: &str, to: &Path, progress: &mut impl FnMut(Progress)) -> Result
 
 fn lower_name(path: &Path) -> String {
     path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_lowercase()
+}
+
+/// GitLab downloads are often named without an extension: add the one the content shows.
+fn with_format_extension(file: PathBuf) -> Result<PathBuf, String> {
+    let name = lower_name(&file);
+    if is_archive(&file) || name.ends_with(".appimage") || name.ends_with(".exe") {
+        return Ok(file);
+    }
+    let mut head = [0u8; 12];
+    let n = fs::File::open(&file).and_then(|mut f| f.read(&mut head)).map_err(|e| e.to_string())?;
+    let ext = match &head[..n] {
+        [b'P', b'K', 3, 4, ..] => ".zip",
+        [0x1f, 0x8b, ..] => ".tar.gz",
+        [0xfd, b'7', b'z', b'X', b'Z', 0, ..] => ".tar.xz",
+        [0x7f, b'E', b'L', b'F', _, _, _, _, b'A', b'I', ..] => ".AppImage",
+        _ => return Ok(file),
+    };
+    let named = file.with_file_name(format!("{}{ext}", file.file_name().unwrap_or_default().to_string_lossy()));
+    fs::rename(&file, &named).map_err(|e| e.to_string())?;
+    Ok(named)
 }
 
 fn is_archive(path: &Path) -> bool {
