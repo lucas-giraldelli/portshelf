@@ -7,7 +7,9 @@ export type Playtime = { total_secs: number; last_played: number; sessions: numb
 /** Hours with one decimal, like Steam ("9.8 hours"); minutes under an hour. */
 export function formatHours(secs: number): string {
   const minutes = Math.floor(secs / 60);
-  if (minutes < 60) return tr("play.minutesLong", { m: Math.max(1, minutes) });
+  if (minutes < 1) return tr("play.underMinute");
+  if (minutes < 2) return tr("play.minute");
+  if (minutes < 60) return tr("play.minutesLong", { m: minutes });
   const hours = (secs / 3600).toLocaleString(tr("play.locale"), { maximumFractionDigits: 1 });
   return tr(hours === "1" ? "play.hour" : "play.hoursLong", { h: hours });
 }

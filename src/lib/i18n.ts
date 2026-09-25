@@ -66,6 +66,8 @@ const en = {
   // time played
   "play.timeLabel": "Play time",
   "play.lastLabel": "Last played",
+  "play.underMinute": "Less than a minute",
+  "play.minute": "1 minute",
   "play.minutesLong": "{m} minutes",
   "play.hour": "1 hour",
   "play.hoursLong": "{h} hours",
@@ -212,6 +214,8 @@ const ptBR: Record<Key, string> = {
   "game.open": "Abrir",
   "play.timeLabel": "Tempo de jogo",
   "play.lastLabel": "Última vez",
+  "play.underMinute": "Menos de 1 minuto",
+  "play.minute": "1 minuto",
   "play.minutesLong": "{m} minutos",
   "play.hour": "1 hora",
   "play.hoursLong": "{h} horas",
