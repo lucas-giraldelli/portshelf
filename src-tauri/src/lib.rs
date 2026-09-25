@@ -11,6 +11,7 @@ use std::process::{Command, Stdio};
 
 mod gamepad;
 mod install;
+mod playtime;
 mod romscan;
 mod scrape;
 
@@ -133,12 +134,12 @@ fn library_path() -> PathBuf {
 /// First run: look for ports in the places they are usually installed.
 fn scan() -> Library {
     let mut installed = BTreeMap::new();
-    // Recomp ports skip their launcher with --game <id>; Dusklight with a config flag.
+    // Ports open on their own launcher; PortShelf only sets up the game file for them.
     let candidates: &[(&str, &str, &[&str], Option<&str>)] = &[
-        ("dk64", "~/Applications/DK64Recompiled/DK64Recompiled", &["--game", "dk64"], Some("~/.config/DK64Recompiled")),
-        ("mt64", "/mnt/main/Roms/mariotennis64recomp/run/play.sh", &["--game", "mt64"], Some("/mnt/main/Roms/mariotennis64recomp/run")),
+        ("dk64", "~/Applications/DK64Recompiled/DK64Recompiled", &[], Some("~/.config/DK64Recompiled")),
+        ("mt64", "/mnt/main/Roms/mariotennis64recomp/run/play.sh", &[], Some("/mnt/main/Roms/mariotennis64recomp/run")),
         ("tp", "~/Applications/Dusklight.AppImage", &[], Some("~/.local/share/TwilitRealm/Dusklight")),
-        ("bm64", "~/Applications/BM64Recompiled/BM64Recompiled", &["--game", "bm64_us"], Some("~/.config/BM64Recompiled")),
+        ("bm64", "~/Applications/BM64Recompiled/BM64Recompiled", &[], Some("~/.config/BM64Recompiled")),
         // Harbour Masters ports boot straight into the game and keep their settings next to the AppImage.
         ("oot-soh", "~/Applications/SoH/soh.appimage", &[], Some("~/Applications/SoH")),
         ("mm-2s2h", "~/Applications/2Ship/2ship.appimage", &[], Some("~/Applications/2Ship")),
@@ -155,7 +156,7 @@ fn scan() -> Library {
                     config_dir: config_dir.map(|d| expand(d).to_string_lossy().into()),
                     cover: None,
                     boot_setting: None,
-                    game_file_arg: *id == "tp",
+                    game_file_arg: false,
                     version: None,
                     rom: Some(match *id {
                         "tp" => RomSpec::ConfigKey { file: "config".into(), key: "backend.isoPath".into() },
@@ -204,6 +205,11 @@ fn full_catalog() -> Value {
         ports.extend(lib.custom);
     }
     catalog
+}
+
+#[tauri::command]
+fn get_playtime() -> BTreeMap<String, playtime::Playtime> {
+    playtime::load(&app_dir())
 }
 
 #[tauri::command]
@@ -272,13 +278,29 @@ fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
     if let Some(cwd) = &install.cwd {
         cmd.current_dir(cwd);
     }
-    let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", install.exec))?;
+    // The same command inside a systemd scope, to know when every process of the game is gone.
+    let scoped = |unit: &str| {
+        if !cfg!(target_os = "linux") || !Path::new("/run/systemd/system").exists() {
+            return None;
+        }
+        let mut wrapped = clean_command("systemd-run");
+        wrapped.args(["--user", "--scope", "--quiet", "--collect", "--unit", unit, "--"]);
+        wrapped.arg(cmd.get_program()).args(cmd.get_args());
+        if let Some(cwd) = cmd.get_current_dir() {
+            wrapped.current_dir(cwd);
+        }
+        wrapped.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        Some(wrapped)
+    };
+    let scoped = scoped(&playtime::unit_name(&id));
+    let session = playtime::start(cmd, scoped).map_err(|e| format!("{}: {e}", install.exec))?;
     let window = tauri::Manager::get_webview_window(&app, "main");
     if let Some(w) = &window {
         let _ = w.hide();
     }
     std::thread::spawn(move || {
-        let _ = child.wait();
+        session.wait(&app_dir(), &id);
+        let _ = tauri::Emitter::emit(&app, "game-exited", &id);
         if let Some(w) = window {
             let _ = w.show();
             let _ = w.set_focus();
@@ -872,7 +894,8 @@ pub fn run() {
             let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, get_library, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, remember_rom, assign_rom, add_install, add_custom_port])
+        .invoke_handler(tauri::generate_handler![get_catalog, get_library,
+            get_playtime, rescan, launch, get_cover, get_config, set_config, rom_status, select_rom, rename, set_cover, scrape_cover, unlock_cover, set_cursor_visible, quit, install_port, platform, set_roms_dir, sync_roms, remember_rom, assign_rom, add_install, add_custom_port])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
                 gamepad::ACTIVE.store(*focused, std::sync::atomic::Ordering::Relaxed);

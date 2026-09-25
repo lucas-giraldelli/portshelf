@@ -5,6 +5,7 @@
   import SystemLogo from "$lib/components/media/SystemLogo.svelte";
   import { shelf } from "$lib/shelf.svelte";
   import { tr } from "$lib/prefs.svelte";
+  import { formatDuration, formatLastPlayed } from "$lib/playtime";
   import type { Console, Port } from "$lib/types";
 
   let {
@@ -19,6 +20,7 @@
   let ready = $derived(shelf.romReady(port.id));
   let progress = $derived(shelf.installing[port.id]);
   let disc = $derived(shelf.isDisc(port));
+  let played = $derived(shelf.playtime[port.id]);
 
   // Renaming: the title becomes a text field.
   let editing = $state(false);
@@ -51,6 +53,9 @@
   <p>
     {shelf.kindLabel(port.kind)}{#if shelf.authorsOf(port)} · {tr("game.by", { authors: shelf.authorsOf(port) })}{/if}{installed ? "" : ` · ${tr("game.notInstalled")}`}
   </p>
+  {#if played}
+    <p class="played">{tr("play.played", { time: formatDuration(played.total_secs) })} · {formatLastPlayed(played.last_played)}</p>
+  {/if}
   {#if shelf.selfManaged(port.id)}
     <p class="rom">{tr("game.asksForFile")}</p>
   {:else if installed && shelf.roms[port.id] && !ready}
@@ -101,6 +106,7 @@
   .rom { font-size: 15px; }
   .rom.missing { color: var(--accent); }
   .rom.needs { font-size: 14px; }
+  .played { font-size: 15px; color: var(--text); }
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
   .actions.small { margin-top: 6px; gap: 16px; }
   .primary.progress {

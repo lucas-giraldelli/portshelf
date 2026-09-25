@@ -8,6 +8,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { tr } from "$lib/prefs.svelte";
 import type { Key } from "$lib/i18n";
 import type { Catalog, Library, Port, RomStatus } from "$lib/types";
+import type { Playtime } from "$lib/playtime";
 
 export type InstallProgress = { stage: string; done: number; total: number | null };
 export type RomSummary = { ready: number; installed: number; assigned: number };
@@ -30,6 +31,8 @@ class Shelf {
   /** Whether each installed port has its game file set up. */
   roms = $state<Record<string, RomStatus>>({});
   installing = $state<Record<string, InstallProgress>>({});
+  /** Time played per port. */
+  playtime = $state<Record<string, Playtime>>({});
   romSummary = $state<RomSummary | null>(null);
   syncing = $state(false);
   os = $state("linux");
@@ -38,6 +41,8 @@ class Shelf {
 
   constructor() {
     invoke<string>("platform").then((p) => (this.os = p));
+    // A game closed: its session was just added to the time played.
+    listen<string>("game-exited", () => this.loadPlaytime());
     listen<InstallProgress & { id: string }>("install-progress", (e) => {
       this.installing[e.payload.id] = e.payload;
     });
@@ -97,6 +102,7 @@ class Shelf {
     try {
       this.catalog = await invoke<Catalog>("get_catalog");
       this.library = await invoke<Library>("get_library");
+      this.loadPlaytime();
       await Promise.all(this.catalog.ports.map((port) => this.loadCover(port.id)));
       this.scrapeMissing();
       await this.syncRoms();
@@ -104,6 +110,10 @@ class Shelf {
     } catch (e) {
       this.fail(e);
     }
+  }
+
+  async loadPlaytime() {
+    this.playtime = await invoke<Record<string, Playtime>>("get_playtime").catch(() => ({}));
   }
 
   private lastRefresh = 0;
