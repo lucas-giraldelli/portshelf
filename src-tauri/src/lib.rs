@@ -481,6 +481,14 @@ fn remember_rom(id: String, path: String) -> Result<(), String> {
 fn assign_rom(path: String) -> Result<Vec<String>, String> {
     let lib = load_library()?;
     let catalog: Value = serde_json::from_str(CATALOG).map_err(|e| e.to_string())?;
+    // An archive is identified by the game file inside it, unpacked to the cache first;
+    // select_rom then unpacks it again into the game's own folder.
+    let (archive, path) = if romscan::is_archive(Path::new(&path)) {
+        let inside = romscan::unpack_game_file(Path::new(&path), &cache_dir().join("unpacked"))?;
+        (Some(path), inside.to_string_lossy().into_owned())
+    } else {
+        (None, path)
+    };
     let file = PathBuf::from(&path);
     let parent = file.parent().ok_or("invalid file")?.to_path_buf();
     let root = PathBuf::from(&lib.roms_dir);
@@ -498,13 +506,15 @@ fn assign_rom(path: String) -> Result<Vec<String>, String> {
     if ids.is_empty() {
         return Err("PortShelf could not tell which game this file is. Put it in the game's own folder.".into());
     }
+    let picked = archive.unwrap_or(path);
     for id in &ids {
         if lib.installed.contains_key(id) {
-            select_rom(id.clone(), path.clone())?;
+            select_rom(id.clone(), picked.clone())?;
         } else {
-            remember_rom(id.clone(), path.clone())?;
+            remember_rom(id.clone(), unpack_for(id, &picked)?)?;
         }
     }
+    let _ = fs::remove_dir_all(cache_dir().join("unpacked"));
     Ok(ids)
 }
 
@@ -549,9 +559,13 @@ async fn sync_roms() -> Result<RomSummary, String> {
     for port in catalog["ports"].as_array().into_iter().flatten() {
         let id = port["id"].as_str().unwrap_or_default().to_string();
         let console = port["console"].as_str().unwrap_or_default().to_string();
-        // Files of another release than the port accepts are left for the user to see.
+        // Archives in the game's folder are unpacked next to themselves; files of another
+        // release than the port accepts are left for the user to see.
         let in_folder = port_folder(&root, port)
-            .map(|f| romscan::files_in(&f))
+            .map(|f| {
+                romscan::unpack_archives_in(&f);
+                romscan::files_in(&f)
+            })
             .unwrap_or_default()
             .into_iter()
             .find(|f| romscan::accepts(port, f) != Some(false));
@@ -774,6 +788,21 @@ fn rom_status(id: String, console: String) -> Result<RomStatus, String> {
     Ok(RomStatus { ready, path, browse_dir, wrong })
 }
 
+/// A zip or 7z picked as a game file is unpacked into the game's folder in the ROM folder
+/// (or PortShelf's cache when there is none); other files are used where they are.
+fn unpack_for(id: &str, path: &str) -> Result<String, String> {
+    if !romscan::is_archive(Path::new(path)) {
+        return Ok(path.to_string());
+    }
+    let lib = load_library()?;
+    let dest = catalog_port(id)
+        .ok()
+        .filter(|_| !lib.roms_dir.is_empty())
+        .and_then(|port| port_folder(Path::new(&lib.roms_dir), &port))
+        .unwrap_or_else(|| cache_dir().join("roms").join(id));
+    Ok(romscan::unpack_game_file(Path::new(path), &dest)?.to_string_lossy().into_owned())
+}
+
 /// Error for a game file of another release than the port accepts; the interface shows it
 /// translated: "wrong-version", the file's release and the accepted ones, tab separated.
 fn wrong_version(port: &Value, file: &Path) -> String {
@@ -785,6 +814,7 @@ fn wrong_version(port: &Value, file: &Path) -> String {
 #[tauri::command]
 fn select_rom(id: String, path: String) -> Result<(), String> {
     let install = installed(&id)?;
+    let path = unpack_for(&id, &path)?;
     if let Ok(port) = catalog_port(&id) {
         if romscan::accepts(&port, Path::new(&path)) == Some(false) {
             return Err(wrong_version(&port, Path::new(&path)));

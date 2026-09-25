@@ -62,6 +62,8 @@ class Shelf {
   kindLabel = (kind: string) => tr(`kind.${kind}` as Key);
   /** Catalog authors, or the GitHub owner of the project. */
   authorsOf = (port: Port) => port.authors ?? port.repo.match(/^https:\/\/github\.com\/([^/]+)/)?.[1] ?? "";
+  /** Disc systems take a disc image instead of a ROM file. */
+  isDisc = (port: Port) => this.catalog?.consoles[port.console]?.media === "disc";
   portById = (id: string) => this.catalog?.ports.find((p) => p.id === id);
   /** Every catalog port of a system, installed ones first. */
   knownPorts = (consoleId: string) =>
@@ -238,7 +240,7 @@ class Shelf {
     const picked = await open({
       title: tr("pick.gameFile", { system: this.catalog?.consoles[port.console].name ?? "", name: this.displayName(port) }),
       defaultPath: this.roms[port.id]?.browse_dir,
-      filters: [{ name: tr("pick.gameFiles"), extensions: disc ? ["iso", "rvz", "gcm", "ciso", "wbfs", "nkit.iso"] : ["z64", "n64", "v64"] }],
+      filters: [{ name: tr("pick.gameFiles"), extensions: [...(disc ? ["iso", "rvz", "gcm", "ciso", "wbfs", "nkit.iso"] : ["z64", "n64", "v64"]), "zip", "7z"] }],
     });
     if (typeof picked !== "string") return;
     try {

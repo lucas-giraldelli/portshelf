@@ -57,7 +57,7 @@
   let primaryLabel = $derived(
     view === "systems" ? tr("game.open")
     : !game ? ""
-    : shelf.isInstalled(game.id) ? (shelf.romReady(game.id) ? (shelf.selfManaged(game.id) ? tr("game.start") : tr("game.play")) : tr("game.selectFile"))
+    : shelf.isInstalled(game.id) ? (shelf.romReady(game.id) ? (shelf.selfManaged(game.id) ? tr("game.start") : tr("game.play")) : tr(shelf.isDisc(game) ? "game.selectDisc" : "game.selectFile"))
     : shelf.unavailable(game) ? tr("game.projectPage")
     : shelf.canInstall(game) ? tr("game.install") : tr("game.getIt"));
 

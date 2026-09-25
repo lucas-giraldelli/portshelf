@@ -18,6 +18,7 @@
   let installed = $derived(shelf.isInstalled(port.id));
   let ready = $derived(shelf.romReady(port.id));
   let progress = $derived(shelf.installing[port.id]);
+  let disc = $derived(shelf.isDisc(port));
 
   // Renaming: the title becomes a text field.
   let editing = $state(false);
@@ -54,7 +55,7 @@
     <p class="rom">{tr("game.asksForFile")}</p>
   {:else if installed && shelf.roms[port.id] && !ready}
     <p class="rom missing">
-      {#if shelf.roms[port.id].wrong}{tr("game.wrongVersion", { found: shelf.roms[port.id].wrong! })}{:else}{tr("game.missingFile")}{/if}
+      {#if shelf.roms[port.id].wrong}{tr("game.wrongVersion", { found: shelf.roms[port.id].wrong! })}{:else}{tr(disc ? "game.missingDisc" : "game.missingFile")}{/if}
     </p>
   {/if}
   {#if port.rom && !(installed && ready)}
@@ -64,10 +65,10 @@
   <div class="actions">
     {#if installed && ready}
       <button class="primary" onclick={onconfirm}>{shelf.selfManaged(port.id) ? tr("game.start") : tr("game.play")}</button>
-      <button class="ghost" onclick={() => shelf.selectRom(port)}>{tr("game.changeFile")}</button>
+      <button class="ghost" onclick={() => shelf.selectRom(port)}>{tr(disc ? "game.changeDisc" : "game.changeFile")}</button>
       <button class="ghost" onclick={onsettings}>{tr("game.settings")}</button>
     {:else if installed}
-      <button class="primary" onclick={onconfirm}>{tr("game.selectFile")}</button>
+      <button class="primary" onclick={onconfirm}>{tr(disc ? "game.selectDisc" : "game.selectFile")}</button>
       <button class="ghost" onclick={onsettings}>{tr("game.settings")}</button>
     {:else if progress}
       <button class="primary progress" disabled style="--p:{progress.total ? (progress.done / progress.total) * 100 : 0}%">{shelf.installLabel(port.id)}</button>

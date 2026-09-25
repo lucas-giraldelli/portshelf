@@ -153,6 +153,62 @@ fn disc_id(path: &Path) -> Option<String> {
     id.iter().all(|c| c.is_ascii_alphanumeric()).then(|| String::from_utf8_lossy(id).into_owned())
 }
 
+/// Zip and 7z archives, the way ROMs are usually downloaded.
+pub fn is_archive(path: &Path) -> bool {
+    let name = path.to_string_lossy().to_lowercase();
+    name.ends_with(".zip") || name.ends_with(".7z")
+}
+
+/// Unpacks the game file inside a zip or 7z archive into `dest` (kept if already there with
+/// the same size) and returns its path.
+pub fn unpack_game_file(archive: &Path, dest: &Path) -> Result<PathBuf, String> {
+    let fail = |e: String| format!("{}: {e}", archive.display());
+    fs::create_dir_all(dest).map_err(|e| fail(e.to_string()))?;
+    let target = |name: &str| Path::new(name).file_name().map(|n| dest.join(n));
+    let unchanged = |path: &Path, size: u64| fs::metadata(path).is_ok_and(|m| m.len() == size);
+    if archive.to_string_lossy().to_lowercase().ends_with(".zip") {
+        let mut zip = zip::ZipArchive::new(fs::File::open(archive).map_err(|e| fail(e.to_string()))?).map_err(|e| fail(e.to_string()))?;
+        for i in 0..zip.len() {
+            let mut entry = zip.by_index(i).map_err(|e| fail(e.to_string()))?;
+            let Some(out) = target(entry.name()).filter(|p| entry.is_file() && console_of(p).is_some()) else { continue };
+            if !unchanged(&out, entry.size()) {
+                let mut file = fs::File::create(&out).map_err(|e| fail(e.to_string()))?;
+                std::io::copy(&mut entry, &mut file).map_err(|e| fail(e.to_string()))?;
+            }
+            return Ok(out);
+        }
+    } else {
+        let mut found = None;
+        let mut reader = sevenz_rust2::ArchiveReader::open(archive, sevenz_rust2::Password::empty()).map_err(|e| fail(e.to_string()))?;
+        reader
+            .for_each_entries(|entry, data| {
+                let Some(out) = target(&entry.name).filter(|p| !entry.is_directory && console_of(p).is_some()) else {
+                    // Solid archives decode in order: skipping means reading through.
+                    std::io::copy(data, &mut std::io::sink())?;
+                    return Ok(true);
+                };
+                if !unchanged(&out, entry.size) {
+                    std::io::copy(data, &mut fs::File::create(&out)?)?;
+                }
+                found = Some(out);
+                Ok(false)
+            })
+            .map_err(|e| fail(e.to_string()))?;
+        if let Some(out) = found {
+            return Ok(out);
+        }
+    }
+    Err(fail("no game file inside".into()))
+}
+
+/// Unpacks the archives sitting in a game's folder, so the game files next to them are found.
+pub fn unpack_archives_in(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for archive in entries.flatten().map(|e| e.path()).filter(|p| p.is_file() && is_archive(p)) {
+        let _ = unpack_game_file(&archive, dir);
+    }
+}
+
 /// Folder name for a game: "Legend of Zelda, The - Majora's Mask" -> "legend_of_zelda_majoras_mask".
 pub fn game_folder(title: &str) -> String {
     normalize(&title.replace('\'', "")).replace(' ', "_")
