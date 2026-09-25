@@ -75,9 +75,11 @@ class Shelf {
   selfManaged = (id: string) => this.isInstalled(id) && !this.library?.installed[id]?.rom;
   canInstall = (port: Port) => !!port.install?.[this.os as "linux" | "windows" | "macos"];
   /** Not made for this operating system (for example, Windows only). */
-  unavailable = (port: Port) => !!port.platforms && !port.platforms.includes(this.os);
+  unavailable = (port: Port) => port.available === false || (!!port.platforms && !port.platforms.includes(this.os));
   platformLabel = (port: Port) =>
-    tr("game.onlyOn", {
+    port.available === false
+      ? tr("game.notAvailable")
+      : tr("game.onlyOn", {
       platforms: (port.platforms ?? []).map((p) => ({ windows: "Windows", linux: "Linux", macos: "macOS" })[p] ?? p).join(` ${tr("game.and")} `),
     });
   kindLabel = (kind: string) => tr(`kind.${kind}` as Key);

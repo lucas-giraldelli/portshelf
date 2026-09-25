@@ -18,6 +18,8 @@ export interface Port {
   game_arg?: string;
   /** No-Intro / Redump title, used to find cover art. */
   title?: string;
+  /** False for a port that has not been released yet: listed, but it cannot be installed. */
+  available?: boolean;
   /** Operating systems the port exists for, when not all of them. */
   platforms?: string[];
   /** The release of the game the port needs, and the hashes ("algo:hex") of the accepted files. */

@@ -29,7 +29,7 @@
         <button class="show" onclick={() => onshow(port)} aria-label={tr("known.show", { name: shelf.displayName(port) })}>
           <PortRow {port} />
         </button>
-        <button class="link" onclick={() => openUrl(port.repo)}>{host(port.repo)} ↗</button>
+        {#if port.available !== false}<button class="link" onclick={() => openUrl(port.repo)}>{host(port.repo)} ↗</button>{/if}
       </li>
     {/each}
   </ul>

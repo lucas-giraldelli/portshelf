@@ -61,6 +61,7 @@
     view === "systems" ? tr("game.open")
     : !game ? ""
     : shelf.isInstalled(game.id) ? (shelf.romReady(game.id) ? (shelf.selfManaged(game.id) ? tr("game.start") : tr("game.play")) : tr(shelf.isDisc(game) ? "game.selectDisc" : "game.selectFile"))
+    : game.available === false ? tr("game.notAvailable")
     : shelf.unavailable(game) ? tr("game.projectPage")
     : shelf.canInstall(game) ? tr("game.install") : tr("game.getIt"));
 
@@ -76,14 +77,15 @@
     | { kind: "search" }
     | { kind: "known"; console: string }
     | { kind: "port"; port: Port }
-    | { kind: "achievements"; port: Port }
-    | { kind: "trophies" };
+    | { kind: "achievements"; port: Port; back?: Overlay }
+    | { kind: "trophies"; console?: string };
   let overlay = $state<Overlay | null>(null);
   /** The open dialog's own key and controller handling, when it has any. */
   let overlayRef = $state<{ handleKey?: (e: KeyboardEvent) => boolean; handlePad?: (action: string) => boolean }>();
   let caption = $state<GameCaption>();
 
-  const close = () => (overlay = null);
+  /** Closes the dialog, or goes back to the one it was opened from. */
+  const close = () => (overlay = overlay?.kind === "achievements" && overlay.back ? overlay.back : null);
   const openOverlay = (next: Overlay) => {
     if (!overlay && !caption?.isEditing()) overlay = next;
   };
@@ -101,7 +103,7 @@
   /** Achievements: the game in view when it has a set, otherwise every game's points. */
   function openAchievements() {
     if (view === "games" && game && shelf.achievements[game.id]) openOverlay({ kind: "achievements", port: game });
-    else openOverlay({ kind: "trophies" });
+    else openOverlay({ kind: "trophies", console: system?.id });
   }
   /** Settings: the game's own in the games view, PortShelf's on the systems screen. */
   function openContextSettings() {
@@ -155,12 +157,12 @@
     } else if (!shelf.unavailable(port) && shelf.canInstall(port)) {
       // Installed ports sort first; keep the focus on the one just installed.
       if (await shelf.installPort(port)) gameIndex = Math.max(0, system?.ports.findIndex((p) => p.id === port.id) ?? 0);
-    } else openUrl(port.repo);
+    } else if (port.available !== false) openUrl(port.repo);
   }
 
   /** Back: close what is open, leave the games, or ask whether to quit. */
   function back() {
-    if (overlay) overlay = null;
+    if (overlay) close();
     else if (view === "games") view = "systems";
     else overlay = { kind: "quit" };
   }
@@ -206,7 +208,7 @@
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
       Enter: confirm, " ": confirm, Escape: back, Backspace: back, Tab: toggleAll,
       s: openPortSettings, r: () => view === "games" && caption?.startRename(),
-      i: () => shelf.chooseSystemFile(system?.id), p: startAddPort,
+      i: () => shelf.chooseSystemFile(system?.id),
       o: () => openOverlay({ kind: "settings" }), k: () => system && openOverlay({ kind: "known", console: system.id }),
       c: openAchievements,
       t: () => shelf.flash(tr("msg.theme", { name: nextTheme() })),
@@ -311,9 +313,9 @@
 {:else if overlay?.kind === "port"}
   <PortSettingsDialog bind:this={overlayRef} port={overlay.port} onclose={close} />
 {:else if overlay?.kind === "achievements"}
-  <AchievementsDialog port={overlay.port} onclose={close} />
+  <AchievementsDialog bind:this={overlayRef} port={overlay.port} onclose={close} />
 {:else if overlay?.kind === "trophies" && shelf.catalog}
-  <TrophiesDialog onclose={close} onopen={(port) => (overlay = { kind: "achievements", port })} />
+  <TrophiesDialog bind:this={overlayRef} focusConsole={overlay.console} onclose={close} onopen={(port) => overlay?.kind === "trophies" && (overlay = { kind: "achievements", port, back: overlay })} />
 {/if}
 
 <style>

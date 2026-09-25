@@ -16,8 +16,8 @@
     <button class="close" onclick={onclose} aria-label={tr("common.close")}>×</button>
     <h2 id="settings-title">{tr("settings.title")}</h2>
 
-    <section>
-      <h3>{tr("settings.appearance")}</h3>
+    <section class="group">
+      <h3 class="group-title">{tr("settings.appearance")}</h3>
       <div class="row">
         <label class="field">
           <span>{tr("header.theme")}</span>
@@ -53,8 +53,8 @@
       </div>
     </section>
 
-    <section>
-      <h3>{tr("settings.roms")}</h3>
+    <section class="group">
+      <h3 class="group-title">{tr("settings.roms")}</h3>
       <div class="split">
         <div>
           <span class="label">{tr("settings.romFolder")}</span>
@@ -63,10 +63,10 @@
         <button class="tool" onclick={() => shelf.chooseRomFolder()}>{shelf.library?.roms_dir ? tr("settings.changeFolder") : tr("header.chooseRomFolder")}</button>
       </div>
       {#if shelf.library?.roms_dir}
-        <ul>
+        <ul class="systems">
           {#each shelf.consoles as [id, info] (id)}
             {@const st = shelf.systemRomStatus(id)}
-            <li>
+            <li class="system-row">
               <SystemLogo {id} name={info.name} height={22} />
               <span class="state" class:ok={st.installed > 0 && st.ready === st.installed} class:warn={st.ready < st.installed}>
                 {st.installed ? tr("settings.readyOf", { ready: st.ready, installed: st.installed }) : tr("settings.noneInstalled")}
@@ -84,15 +84,15 @@
 <style>
   .body { padding: 24px 28px; }
   h2 { margin: 0 0 8px; }
-  section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 16px; }
-  h3 { margin: 0 0 12px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+  .group { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 16px; }
+  .group-title { margin: 0 0 12px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
   .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
   small { color: var(--muted); font-size: 13px; }
   .split { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .split .label { display: block; font-size: 14px; color: var(--muted); }
   .split code { font-size: 14px; color: var(--text); word-break: break-all; }
-  ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
-  li { display: grid; grid-template-columns: 170px 1fr auto; align-items: center; gap: 12px; padding: 8px 12px; border-radius: var(--radius); background: var(--surface); }
+  .systems { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
+  .system-row { display: grid; grid-template-columns: 170px 1fr auto; align-items: center; gap: 12px; padding: 8px 12px; border-radius: var(--radius); background: var(--surface); }
   .state { font-size: 14px; color: var(--muted); }
   .state.ok { color: var(--ok); }
   .state.warn { color: var(--warn); }

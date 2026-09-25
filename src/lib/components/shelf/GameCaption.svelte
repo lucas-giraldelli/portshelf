@@ -86,7 +86,7 @@
     {#if achievements}
       <button class="ghost ach" onclick={onachievements}><TrophyIcon size={18} /> {tr("ach.button", { n: achievements.unlocked, total: achievements.total })}</button>
     {/if}
-    <button class="ghost" onclick={() => openUrl(port.repo)}>{tr("game.projectPage")}</button>
+    {#if port.available !== false}<button class="ghost" onclick={() => openUrl(port.repo)}>{tr("game.projectPage")}</button>{/if}
   </div>
   <div class="actions small">
     <button class="link" onclick={() => shelf.pickCover(port)}>{tr("game.chooseCover")}</button>
