@@ -70,6 +70,11 @@ pub fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
     }
     let scoped = in_scope(&cmd, &playtime::unit_name(&id));
     let session = playtime::start(cmd, scoped).map_err(|e| format!("{}: {e}", install.exec))?;
+    // Ports with an achievement set are watched while they run.
+    if let Some(set) = crate::achievements::set_for(&id) {
+        let pid = session.pid();
+        std::thread::spawn(move || crate::achievements::watch(pid, set));
+    }
     let window = tauri::Manager::get_webview_window(&app, "main");
     if let Some(w) = &window {
         let _ = w.hide();

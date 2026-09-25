@@ -9,6 +9,7 @@
 //! - `install`, `romscan`, `scrape`, `gamepad`: downloads, game file identification, cover
 //!   search and the controller, with no Tauri commands of their own
 
+mod achievements;
 mod catalog;
 mod covers;
 mod gamepad;
@@ -97,6 +98,7 @@ pub fn run() {
             playtime::get_playtime,
             overlay::set_overlay_style,
             overlay::preview_overlay,
+            achievements::get_achievements,
         ])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {

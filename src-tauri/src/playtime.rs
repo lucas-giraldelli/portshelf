@@ -73,6 +73,11 @@ fn scope_active(unit: &str) -> bool {
 }
 
 impl Session {
+    /// The process started for the game (inside the scope when there is one).
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
     /// Blocks until the game is gone, then adds the session to the port's time played.
     pub fn wait(mut self, app_dir: &Path, id: &str) {
         let _ = self.child.wait();

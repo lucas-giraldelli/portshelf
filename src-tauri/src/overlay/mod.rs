@@ -66,6 +66,9 @@ pub fn run(json: &str) -> bool {
 pub struct Style {
     pub label: String,
     pub colors: Colors,
+    /// The shelf's language, for the achievements' own texts.
+    #[serde(default)]
+    pub lang: String,
 }
 
 static STYLE: Mutex<Option<Style>> = Mutex::new(None);
@@ -75,6 +78,11 @@ pub fn set_overlay_style(style: Style) {
     if let Ok(mut current) = STYLE.lock() {
         *current = Some(style);
     }
+}
+
+/// The shelf's language as last sent by the interface.
+pub fn language() -> String {
+    STYLE.lock().ok().and_then(|s| s.as_ref().map(|s| s.lang.clone())).filter(|l| !l.is_empty()).unwrap_or_else(|| "en".into())
 }
 
 /// Shows an achievement card over whatever is on screen, in the current style. The card runs

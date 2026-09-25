@@ -1,0 +1,78 @@
+{
+  "port": "bk",
+  "memory": "n64-recomp",
+  "notes": "Addresses are for the US 1.0 release, from the Banjo-Kazooie decompilation (CC0): items at 0x80385F30 (s32 per item, see item_e), collected jiggies at 0x803832C0 (one bit per jiggy: byte (id - 1) / 8, bit id & 7), current level at 0x80383301.",
+  "playing": [
+    { "read": "u8", "addr": "0x80383301", "op": "ge", "value": 1 },
+    { "read": "u8", "addr": "0x80383301", "op": "le", "value": 12 }
+  ],
+  "achievements": [
+    {
+      "id": "first-jiggy",
+      "points": 5,
+      "title": { "en": "First piece", "pt-BR": "Primeira peça" },
+      "description": { "en": "Collect your first jiggy", "pt-BR": "Pegue a sua primeira Jiggy" },
+      "conditions": [{ "read": "u32", "addr": "0x80385FC8", "op": "ge", "value": 1 }]
+    },
+    {
+      "id": "first-mumbo-token",
+      "points": 5,
+      "title": { "en": "Mumbo's coin", "pt-BR": "Moeda do Mumbo" },
+      "description": { "en": "Collect a Mumbo token", "pt-BR": "Pegue uma moeda do Mumbo" },
+      "conditions": [{ "read": "u32", "addr": "0x80385FC4", "op": "ge", "value": 1 }]
+    },
+    {
+      "id": "first-empty-honeycomb",
+      "points": 5,
+      "title": { "en": "Sweet tooth", "pt-BR": "Formiga no mel" },
+      "description": { "en": "Find an empty honeycomb piece", "pt-BR": "Encontre um favo de mel vazio" },
+      "conditions": [{ "read": "u32", "addr": "0x80385F7C", "op": "ge", "value": 1 }]
+    },
+    {
+      "id": "five-jinjos",
+      "points": 10,
+      "title": { "en": "Family reunion", "pt-BR": "Família reunida" },
+      "description": { "en": "Find all five Jinjos in one world", "pt-BR": "Encontre os cinco Jinjos de um mundo" },
+      "conditions": [{ "read": "u32", "addr": "0x80385F78", "op": "ge", "value": 5 }]
+    },
+    {
+      "id": "ten-jiggies",
+      "points": 10,
+      "title": { "en": "Ten pieces", "pt-BR": "Dez peças" },
+      "description": { "en": "Collect ten jiggies", "pt-BR": "Pegue dez Jiggies" },
+      "conditions": [{ "read": "u32", "addr": "0x80385FC8", "op": "ge", "value": 10 }]
+    },
+    {
+      "id": "hundred-notes",
+      "points": 15,
+      "title": { "en": "Full score", "pt-BR": "Partitura completa" },
+      "description": { "en": "Collect all 100 notes in one world", "pt-BR": "Pegue as 100 notas de um mundo" },
+      "conditions": [{ "read": "u32", "addr": "0x80385F60", "op": "ge", "value": 100 }]
+    },
+    {
+      "id": "mumbos-mountain",
+      "points": 20,
+      "title": { "en": "Mountain climbed", "pt-BR": "Montanha conquistada" },
+      "description": { "en": "Collect all ten jiggies in Mumbo's Mountain", "pt-BR": "Pegue as dez Jiggies de Mumbo's Mountain" },
+      "conditions": [
+        { "read": "bit", "addr": "0x803832C0", "bit": 1, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C0", "bit": 2, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C0", "bit": 3, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C0", "bit": 4, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C0", "bit": 5, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C0", "bit": 6, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C0", "bit": 7, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C0", "bit": 0, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C1", "bit": 1, "op": "eq", "value": 1 },
+        { "read": "bit", "addr": "0x803832C1", "bit": 2, "op": "eq", "value": 1 }
+      ]
+    },
+    {
+      "id": "fifty-jiggies",
+      "points": 25,
+      "title": { "en": "Halfway there", "pt-BR": "Meio caminho" },
+      "description": { "en": "Collect fifty jiggies", "pt-BR": "Pegue cinquenta Jiggies" },
+      "conditions": [{ "read": "u32", "addr": "0x80385FC8", "op": "ge", "value": 50 }]
+    }
+  ]
+}

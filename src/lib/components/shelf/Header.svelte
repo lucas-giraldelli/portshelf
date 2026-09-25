@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Brand on the left; fullscreen and settings on the right.
+  // Brand on the left; settings and fullscreen on the right.
   import { prefs, tr } from "$lib/prefs.svelte";
   import { toggleFullscreen } from "$lib/fullscreen";
   let { onsettings }: { onsettings: () => void } = $props();
@@ -7,6 +7,7 @@
 
 <header>
   <h1><img src="/icon.svg" alt="" width="34" height="34" draggable="false" />PortShelf</h1>
+  <button class="tool square" onclick={onsettings} title={tr("settings.open")} aria-label={tr("settings.open")}>⚙</button>
   <button class="tool square" onclick={toggleFullscreen} title={tr(prefs.fullscreen ? "header.leaveFullscreen" : "header.fullscreen")} aria-label={tr(prefs.fullscreen ? "header.leaveFullscreen" : "header.fullscreen")}>
     <svg viewBox="0 0 24 24" aria-hidden="true">
       {#if prefs.fullscreen}
@@ -16,7 +17,6 @@
       {/if}
     </svg>
   </button>
-  <button class="tool square" onclick={onsettings} title={tr("settings.open")} aria-label={tr("settings.open")}>⚙</button>
 </header>
 
 <style>

@@ -38,6 +38,7 @@ $effect.root(() => {
     invoke("set_overlay_style", {
       style: {
         label: translate(prefs.lang, "overlay.unlocked"),
+        lang: prefs.lang,
         colors: { panel: p.panel, text: p.text, muted: p.muted, accent: p.accent, onAccent: p.onAccent },
       },
     }).catch(() => {});
