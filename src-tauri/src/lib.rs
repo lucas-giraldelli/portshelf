@@ -43,7 +43,18 @@ pub fn run() {
     if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Opening PortShelf again brings back the running one, even while it waits hidden for a
+    // game. Development builds stay separate, so they can run next to the installed app.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(window) = tauri::Manager::get_webview_window(app, "main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+            gamepad::ACTIVE.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }));
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
