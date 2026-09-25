@@ -120,6 +120,10 @@ PortShelf does not include, download or distribute games, ROMs, disc images, BIO
 
 Each port is a separate project under its own license, and its authors are responsible for it. Game titles, console names, logos and cover art belong to their respective owners and are shown only to identify the games and systems.
 
+## License
+
+PortShelf's code is released under the [MIT License](LICENSE). Images and fonts bundled with it keep their own licenses, listed in [CREDITS.md](CREDITS.md).
+
 ## Credits
 
 Built with [Tauri](https://tauri.app) and [Svelte](https://svelte.dev). Console photographs by Evan-Amos and others on Wikimedia Commons; see [CREDITS.md](CREDITS.md) for every image source and license.

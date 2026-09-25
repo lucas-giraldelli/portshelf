@@ -1,8 +1,10 @@
 [package]
 name = "portshelf"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A launcher for native PC ports of console games"
+authors = ["Lucas Giraldelli"]
+license = "MIT"
+repository = "https://github.com/lucas-giraldelli/portshelf"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
