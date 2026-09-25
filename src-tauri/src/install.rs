@@ -306,8 +306,9 @@ mod tests {
 
     #[test]
     fn repo_from_url() {
-        assert_eq!(github_repo("https://github.com/HarbourMasters/Shipwright").as_deref(), Some("HarbourMasters/Shipwright"));
-        assert_eq!(github_repo("https://github.com/HarbourMasters/starship/releases/tag/v1.0.0").as_deref(), Some("HarbourMasters/starship"));
-        assert!(github_repo("https://sm64pc.info/sm64pcbuilder2/").is_none());
+        assert_eq!(repo_path("https://github.com/HarbourMasters/Shipwright", "github.com").as_deref(), Some("HarbourMasters/Shipwright"));
+        assert_eq!(repo_path("https://github.com/HarbourMasters/starship/releases/tag/v1.0.0", "github.com").as_deref(), Some("HarbourMasters/starship"));
+        assert_eq!(repo_path("https://gitlab.com/sonicdcer/MarioKart64Recomp", "gitlab.com").as_deref(), Some("sonicdcer/MarioKart64Recomp"));
+        assert!(repo_path("https://sm64pc.info/sm64pcbuilder2/", "github.com").is_none());
     }
 }

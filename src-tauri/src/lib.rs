@@ -451,6 +451,43 @@ struct CatalogInstall {
     boot_setting: Option<BootSetting>,
     #[serde(default)]
     game_file_arg: bool,
+    /// N64: Recompiled ports: where they keep settings and the ROM follows from these two ids.
+    recomp: Option<RecompIds>,
+}
+
+/// Ids a RecompFrontend / N64ModernRuntime port is built with (read from its source):
+/// settings live in the app folder named after `program_id`, and the checked ROM is stored
+/// there as `<game_id>.z64`, which is where the port's own launcher looks for it.
+#[derive(Deserialize, Default, Clone)]
+struct RecompIds {
+    program_id: String,
+    game_id: String,
+}
+
+/// The app folder RecompFrontend uses: ~/.config/<id> on Linux (it does not follow
+/// XDG_CONFIG_HOME), %LOCALAPPDATA%\<id> on Windows, Application Support on macOS.
+fn recomp_app_folder(program_id: &str) -> PathBuf {
+    match std::env::consts::OS {
+        "windows" => dirs::data_local_dir().unwrap_or_default().join(program_id),
+        "macos" => dirs::data_dir().unwrap_or_default().join(program_id),
+        _ => home().join(".config").join(program_id),
+    }
+}
+
+impl CatalogInstall {
+    /// Settings folder and game file layout for a port installed with this program folder.
+    fn layout(&self, program_dir: &Path) -> (Option<String>, Option<RomSpec>) {
+        if let Some(ids) = &self.recomp {
+            let dir = recomp_app_folder(&ids.program_id).to_string_lossy().into_owned();
+            return (Some(dir), Some(RomSpec::Stored { file: format!("{}.z64", ids.game_id) }));
+        }
+        let dir = if self.config_in_install {
+            Some(program_dir.to_string_lossy().into_owned())
+        } else {
+            self.config_dir.as_deref().map(|d| expand(d).to_string_lossy().into_owned())
+        };
+        (dir, self.rom.clone())
+    }
 }
 
 fn catalog_port(id: &str) -> Result<Value, String> {
@@ -651,11 +688,7 @@ fn add_install(id: String, exec: String) -> Result<Library, String> {
         return Err(format!("{exec} is not a file"));
     }
     let cwd = exec_path.parent().unwrap_or(Path::new("/")).to_path_buf();
-    let config_dir = if spec.config_in_install {
-        Some(cwd.to_string_lossy().into_owned())
-    } else {
-        spec.config_dir.as_deref().map(|d| expand(d).to_string_lossy().into_owned())
-    };
+    let (config_dir, rom) = spec.layout(&cwd);
     let mut lib = load_library()?;
     lib.installed.insert(
         id.clone(),
@@ -666,7 +699,7 @@ fn add_install(id: String, exec: String) -> Result<Library, String> {
             config_dir,
             cover: None,
             boot_setting: spec.boot_setting,
-            rom: spec.rom,
+            rom,
             game_file_arg: spec.game_file_arg,
             version: None,
         },
@@ -717,11 +750,7 @@ async fn install_port(app: tauri::AppHandle, id: String) -> Result<Library, Stri
         .map_err(|e| e.to_string())??
     };
     let cwd = exec.parent().unwrap_or(&dest).to_path_buf();
-    let config_dir = if spec.config_in_install {
-        Some(cwd.to_string_lossy().into_owned())
-    } else {
-        spec.config_dir.as_deref().map(|d| expand(d).to_string_lossy().into_owned())
-    };
+    let (config_dir, rom) = spec.layout(&cwd);
     let mut lib = load_library()?;
     lib.installed.insert(
         id.clone(),
@@ -732,7 +761,7 @@ async fn install_port(app: tauri::AppHandle, id: String) -> Result<Library, Stri
             config_dir,
             cover: None,
             boot_setting: spec.boot_setting,
-            rom: spec.rom,
+            rom,
             game_file_arg: spec.game_file_arg,
             version: Some(tag),
         },
@@ -903,4 +932,18 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recomp_layout_follows_the_ids() {
+        let port = catalog_port("bk").unwrap();
+        let spec: CatalogInstall = serde_json::from_value(port["install"].clone()).unwrap();
+        let (dir, rom) = spec.layout(Path::new("/anywhere"));
+        assert_eq!(dir.unwrap(), home().join(".config/BanjoRecompiled").to_string_lossy());
+        assert!(matches!(rom, Some(RomSpec::Stored { file }) if file == "bk.n64.us.1.0.z64"));
+    }
 }
