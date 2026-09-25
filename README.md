@@ -20,7 +20,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - Edits the settings of RecompFrontend ports
 - Finds cover art automatically; covers and names can be changed per game
 - Search across every system and a list of every known port with links to each project
-- Four colour themes, each with a light and a dark mode
+- Four colour themes, each with a light and a dark mode; fullscreen stays on when games open and close
 - English and Brazilian Portuguese
 
 ## Controls
@@ -37,6 +37,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Add port | P | |
 | PortShelf settings | O | North face button (systems screen) |
 | Next theme / light or dark mode | T / M | |
+| Fullscreen or window | F11 | |
 | English or Brazilian Portuguese | L | |
 | Choose a game file for the system in view | I | |
 | Search every system | Ctrl+F | Start |
