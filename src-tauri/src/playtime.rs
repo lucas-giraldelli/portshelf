@@ -84,3 +84,9 @@ impl Session {
         record(app_dir, id, self.started.elapsed());
     }
 }
+
+/// Time played per port, for the shelf.
+#[tauri::command]
+pub fn get_playtime() -> BTreeMap<String, Playtime> {
+    load(&crate::paths::app_dir())
+}
