@@ -1,13 +1,15 @@
-// Time played, as the caption shows it: "12 h 30 min played · yesterday".
+// Time played, as the caption shows it: "9.8 hours", last played "yesterday".
 
 import { tr } from "$lib/prefs.svelte";
 
 export type Playtime = { total_secs: number; last_played: number; sessions: number };
 
-export function formatDuration(secs: number): string {
+/** Hours with one decimal, like Steam ("9.8 hours"); minutes under an hour. */
+export function formatHours(secs: number): string {
   const minutes = Math.floor(secs / 60);
-  if (minutes < 60) return tr("play.minutes", { m: Math.max(1, minutes) });
-  return tr("play.hours", { h: Math.floor(minutes / 60), m: minutes % 60 });
+  if (minutes < 60) return tr("play.minutesLong", { m: Math.max(1, minutes) });
+  const hours = (secs / 3600).toLocaleString(tr("play.locale"), { maximumFractionDigits: 1 });
+  return tr(hours === "1" ? "play.hour" : "play.hoursLong", { h: hours });
 }
 
 export function formatLastPlayed(unix: number): string {
