@@ -180,24 +180,3 @@ pub fn rename(id: String, name: Option<String>) -> Result<Library, String> {
     update(|lib| lib.overrides.entry(id).or_default().name = name)?;
     load()
 }
-
-/// Registers a port that is not in the catalog, so it can be added like any other.
-/// Returns its id.
-#[tauri::command]
-pub fn add_custom_port(name: String, console: String) -> Result<String, String> {
-    let name = name.trim().to_string();
-    if name.is_empty() {
-        return Err("give the port a name".into());
-    }
-    let slug: String = name.to_lowercase().chars().map(|c| if c.is_alphanumeric() { c } else { '-' }).collect();
-    update(|lib| {
-        let mut id = format!("custom-{}", slug.trim_matches('-'));
-        while lib.custom.iter().any(|p| p["id"] == id.as_str()) {
-            id.push('2');
-        }
-        lib.custom.push(serde_json::json!({
-            "id": id, "name": name, "title": name, "console": console, "kind": "custom", "repo": ""
-        }));
-        id
-    })
-}

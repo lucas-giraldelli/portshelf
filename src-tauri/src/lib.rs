@@ -80,7 +80,6 @@ pub fn run() {
             library::get_library,
             library::rescan,
             library::rename,
-            library::add_custom_port,
             ports::add_install,
             ports::install_port,
             roms::rom_status,

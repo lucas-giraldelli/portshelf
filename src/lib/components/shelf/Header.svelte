@@ -1,13 +1,14 @@
 <script lang="ts">
-  // Brand on the left; settings and fullscreen on the right.
+  // Brand on the left; add port, achievements, settings and fullscreen on the right.
   import { prefs, tr } from "$lib/prefs.svelte";
   import { toggleFullscreen } from "$lib/fullscreen";
   import TrophyIcon from "$lib/components/ui/TrophyIcon.svelte";
-  let { onsettings, ontrophies }: { onsettings: () => void; ontrophies: () => void } = $props();
+  let { onaddport, onsettings, ontrophies }: { onaddport: () => void; onsettings: () => void; ontrophies: () => void } = $props();
 </script>
 
 <header>
   <h1><img src="/icon.svg" alt="" width="34" height="34" draggable="false" />PortShelf</h1>
+  <button class="tool" onclick={onaddport} title={tr("add.hint")}>{tr("header.addPort")}</button>
   <button class="tool square" onclick={ontrophies} title={tr("ach.title")} aria-label={tr("ach.title")}><TrophyIcon size={20} /></button>
   <button class="tool square" onclick={onsettings} title={tr("settings.open")} aria-label={tr("settings.open")}>⚙</button>
   <button class="tool square" onclick={toggleFullscreen} title={tr(prefs.fullscreen ? "header.leaveFullscreen" : "header.fullscreen")} aria-label={tr(prefs.fullscreen ? "header.leaveFullscreen" : "header.fullscreen")}>

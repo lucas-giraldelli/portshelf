@@ -1,6 +1,5 @@
 <script lang="ts">
-  // App settings: appearance and language, the ROM folder with each system's game files, and
-  // adding ports installed outside PortShelf.
+  // App settings: appearance and language, and the ROM folder with each system's game files.
   import Dialog from "$lib/components/ui/Dialog.svelte";
   import SystemLogo from "$lib/components/media/SystemLogo.svelte";
   import { prefs, tr } from "$lib/prefs.svelte";
@@ -9,7 +8,7 @@
   import { themes } from "$lib/themes";
   import { languages, type Key } from "$lib/i18n";
 
-  let { onclose, onaddport }: { onclose: () => void; onaddport: () => void } = $props();
+  let { onclose }: { onclose: () => void } = $props();
 </script>
 
 <Dialog {onclose} labelledby="settings-title" width={720}>
@@ -79,13 +78,6 @@
       {/if}
     </section>
 
-    <section>
-      <h3>{tr("settings.ports")}</h3>
-      <div class="split">
-        <p class="muted">{tr("settings.addPortHint")}</p>
-        <button class="tool" onclick={onaddport}>{tr("header.addPort")}</button>
-      </div>
-    </section>
   </div>
 </Dialog>
 
@@ -99,7 +91,6 @@
   .split { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .split .label { display: block; font-size: 14px; color: var(--muted); }
   .split code { font-size: 14px; color: var(--text); word-break: break-all; }
-  .split p { margin: 0; flex: 1; min-width: 220px; }
   ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
   li { display: grid; grid-template-columns: 170px 1fr auto; align-items: center; gap: 12px; padding: 8px 12px; border-radius: var(--radius); background: var(--surface); }
   .state { font-size: 14px; color: var(--muted); }

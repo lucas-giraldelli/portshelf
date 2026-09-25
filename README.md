@@ -36,7 +36,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 | Port settings (games screen) | S | L2 |
 | Known ports of the system | K | West face button (Xbox X, PlayStation Square) |
 | Rename | R | |
-| Add port | P | |
+| Add a catalog port you installed yourself (also the button in the header) | P | |
 | PortShelf settings | O | L2 (systems screen) |
 | Next theme / light or dark mode | T / M | |
 | Fullscreen or window (also the button next to the settings gear) | F11 | R2 |
@@ -88,7 +88,7 @@ src/
   lib/prefs.svelte.ts       theme, light or dark mode, language
   lib/components/
     shelf/                  carousel, captions, header, key hints
-    dialogs/  panels/       settings, add port, search, quit; known ports, port settings
+    dialogs/                settings, add port, search, quit, known ports, port settings, achievements
     media/                  cartridge, disc, console photo, system logo
     ui/                     dialog and side panel frames, list rows, button glyphs
 src-tauri/src/

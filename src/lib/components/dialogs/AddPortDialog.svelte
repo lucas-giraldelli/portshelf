@@ -1,20 +1,17 @@
 <script lang="ts">
   // After picking a port's program: confirm which catalog port it is (guessed from the file and
-  // folder names), pick another, or describe a new one.
+  // folder names) or pick another. Only ports PortShelf knows can be added.
   import Dialog from "$lib/components/ui/Dialog.svelte";
   import { tr } from "$lib/prefs.svelte";
   import { guessPort, shelf } from "$lib/shelf.svelte";
 
-  let { exec, consoleId, onclose, onadded }: { exec: string; consoleId: string; onclose: () => void; onadded: (id: string) => void } = $props();
+  let { exec, onclose, onadded }: { exec: string; onclose: () => void; onadded: (id: string) => void } = $props();
 
   // svelte-ignore state_referenced_locally
-  let choice = $state(guessPort(exec));
-  let name = $state("");
-  // svelte-ignore state_referenced_locally
-  let system = $state(consoleId);
+  let choice = $state(guessPort(exec) ?? "");
 
   async function add() {
-    const id = await shelf.addInstall(exec, choice, name, system);
+    const id = await shelf.addInstall(exec, choice);
     if (id) onadded(id);
   }
 </script>
@@ -26,6 +23,7 @@
     <label class="field">
       <span>{tr("add.thisIs")}</span>
       <select bind:value={choice}>
+        <option value="" disabled>{tr("add.choose")}</option>
         {#each shelf.consoles as [id, info] (id)}
           <optgroup label={info.name}>
             {#each shelf.catalog?.ports.filter((p) => p.console === id) ?? [] as port (port.id)}
@@ -33,29 +31,14 @@
             {/each}
           </optgroup>
         {/each}
-        <option value="new">{tr("add.new")}</option>
       </select>
     </label>
-    {#if choice === "new"}
-      <label class="field">
-        <span>{tr("add.name")}</span>
-        <!-- svelte-ignore a11y_autofocus -->
-        <input type="text" bind:value={name} placeholder={tr("game.nameField")} autofocus />
-      </label>
-      <label class="field">
-        <span>{tr("add.system")}</span>
-        <select bind:value={system}>
-          {#each shelf.consoles as [id, info] (id)}
-            <option value={id}>{info.name}</option>
-          {/each}
-        </select>
-      </label>
-    {:else if shelf.isInstalled(choice)}
+    {#if choice && shelf.isInstalled(choice)}
       <p class="warn">{tr("add.replaces")}</p>
     {/if}
     <div class="choices">
       <button class="tool" onclick={onclose}>{tr("common.cancel")}</button>
-      <button class="tool accent" onclick={add} disabled={choice === "new" && !name.trim()}>{tr("common.add")}</button>
+      <button class="tool accent" onclick={add} disabled={!choice}>{tr("common.add")}</button>
     </div>
   </div>
 </Dialog>

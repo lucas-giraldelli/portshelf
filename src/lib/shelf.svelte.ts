@@ -312,9 +312,8 @@ class Shelf {
   }
 
   /** Adds a program installed outside PortShelf, as a catalog port or a new one. Returns its id. */
-  async addInstall(exec: string, choice: string, name: string, consoleId: string) {
+  async addInstall(exec: string, id: string) {
     try {
-      const id = choice === "new" ? await invoke<string>("add_custom_port", { name, console: consoleId }) : choice;
       this.library = await invoke("add_install", { id, exec });
       this.catalog = await invoke<Catalog>("get_catalog");
       const port = this.portById(id);
@@ -343,13 +342,13 @@ class Shelf {
 
 export const shelf = new Shelf();
 
-/** Which catalog port a program most likely is, from its file and folder names ("new" if none). */
-export function guessPort(exec: string): string {
+/** Which catalog port a program most likely is, from its file and folder names (null if none). */
+export function guessPort(exec: string): string | null {
   const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
   const parts = exec.split("/");
   const file = squash((parts.pop() ?? "").replace(/\.(appimage|exe|x86_64)$/i, ""));
   const folder = squash(parts.pop() ?? "");
-  let best = { id: "new", score: 0 };
+  let best: { id: string | null; score: number } = { id: null, score: 0 };
   for (const port of shelf.catalog?.ports ?? []) {
     const words = [port.id, port.name, port.title ?? "", port.repo.split("/").filter(Boolean).pop() ?? "", ...port.id.split("-")]
       .map(squash)

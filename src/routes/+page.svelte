@@ -254,7 +254,7 @@
 <svelte:window onkeydown={onKey} onmousedown={() => (inputMode = "keys")} onmousemove={(e) => { if (e.movementX || e.movementY) inputMode = "keys"; }} />
 
 <main style="--system: {system?.info.color ?? 'var(--accent)'}">
-  <Header onsettings={() => openOverlay({ kind: "settings" })} ontrophies={() => openOverlay({ kind: "trophies" })} />
+  <Header onaddport={startAddPort} onsettings={() => openOverlay({ kind: "settings" })} ontrophies={() => openOverlay({ kind: "trophies" })} />
 
   {#if shelf.error}
     <p class="error" role="alert">{shelf.error} <button class="ghost" onclick={() => (shelf.error = "")}>{tr("common.dismiss")}</button></p>
@@ -301,9 +301,9 @@
 {#if overlay?.kind === "quit"}
   <QuitDialog bind:this={overlayRef} pad={inputMode === "pad"} onanswer={answerQuit} />
 {:else if overlay?.kind === "settings" && shelf.catalog}
-  <SettingsDialog onclose={close} onaddport={startAddPort} />
+  <SettingsDialog onclose={close} />
 {:else if overlay?.kind === "add" && shelf.catalog}
-  <AddPortDialog exec={overlay.exec} consoleId={system?.id ?? "n64"} onclose={close} onadded={portAdded} />
+  <AddPortDialog exec={overlay.exec} onclose={close} onadded={portAdded} />
 {:else if overlay?.kind === "search" && shelf.catalog}
   <SearchDialog bind:this={overlayRef} onclose={close} onpick={showOnShelf} />
 {:else if overlay?.kind === "known" && shelf.catalog}
