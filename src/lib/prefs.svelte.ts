@@ -1,6 +1,7 @@
 // User preferences kept on this machine: theme, light / dark mode, language and fullscreen, plus the
 // translate function every component uses for its text.
 
+import { invoke } from "@tauri-apps/api/core";
 import { applyTheme, themes, type Mode } from "$lib/themes";
 import { defaultLang, translate, type Key, type Lang } from "$lib/i18n";
 
@@ -32,6 +33,14 @@ export function nextTheme(): string {
 $effect.root(() => {
   $effect(() => {
     applyTheme(prefs.theme, prefs.mode);
+    // Achievement cards over games use the same colours and language as the shelf.
+    const p = (themes[prefs.theme] ?? themes.arcade)[prefs.mode];
+    invoke("set_overlay_style", {
+      style: {
+        label: translate(prefs.lang, "overlay.unlocked"),
+        colors: { panel: p.panel, text: p.text, muted: p.muted, accent: p.accent, onAccent: p.onAccent },
+      },
+    }).catch(() => {});
     try {
       localStorage.setItem("portshelf.theme", prefs.theme);
       localStorage.setItem("portshelf.mode", prefs.mode);

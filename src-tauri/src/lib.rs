@@ -15,6 +15,7 @@ mod gamepad;
 mod install;
 mod launch;
 mod library;
+pub mod overlay;
 mod paths;
 mod playtime;
 mod port_settings;
@@ -94,6 +95,8 @@ pub fn run() {
             port_settings::get_config,
             port_settings::set_config,
             playtime::get_playtime,
+            overlay::set_overlay_style,
+            overlay::preview_overlay,
         ])
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::Focused(focused) = event {

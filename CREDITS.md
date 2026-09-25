@@ -36,6 +36,8 @@ Both under the SIL Open Font License 1.1, Latin subsets from Google Fonts:
 - [Outfit](https://fonts.google.com/specimen/Outfit) by Rodrigo Fuenzalida, for headings (`static/fonts/outfit.woff2`)
 - [Atkinson Hyperlegible Next](https://fonts.google.com/specimen/Atkinson+Hyperlegible+Next) by the Braille Institute, for text (`static/fonts/atkinson-next.woff2`)
 
+The achievement card drawn over games uses fixed-weight TTF copies of the same two fonts, from the [Google Fonts repository](https://github.com/google/fonts) (`src-tauri/assets/fonts/`).
+
 ## Box art
 
 Box art is not bundled. The shelf reads covers from `~/.config/portshelf/covers/`; the ones used during development come from [libretro-thumbnails](https://github.com/libretro-thumbnails).

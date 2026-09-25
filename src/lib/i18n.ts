@@ -150,6 +150,11 @@ const en = {
   "settings.ports": "Ports",
   "settings.addPortHint": "Add a port you installed yourself; PortShelf recognises most of them by name.",
   "footer.options": "Settings",
+  // achievement cards
+  "overlay.unlocked": "Achievement unlocked",
+  "overlay.preview": "Try the achievement card",
+  "overlay.previewTitle": "This is how it looks",
+  "overlay.previewText": "Shown here while you play",
   // themes
   "theme.arcade": "Warm amber on charcoal, like a cabinet in a dark room",
   "theme.console": "Grey plastic and the red, yellow, green and blue of the buttons",
@@ -295,6 +300,10 @@ const ptBR: Record<Key, string> = {
   "settings.ports": "Ports",
   "settings.addPortHint": "Adicione um port que você instalou por conta própria; o PortShelf reconhece a maioria pelo nome.",
   "footer.options": "Configurações",
+  "overlay.unlocked": "Conquista desbloqueada",
+  "overlay.preview": "Testar o aviso de conquista",
+  "overlay.previewTitle": "É assim que aparece",
+  "overlay.previewText": "Aparece aqui enquanto você joga",
   "theme.arcade": "Âmbar quente sobre carvão, como um fliperama num quarto escuro",
   "theme.console": "Plástico cinza e o vermelho, amarelo, verde e azul dos botões",
   "theme.phosphor": "Brilho verde de CRT sobre vidro preto",
