@@ -114,12 +114,6 @@ pub fn show(title: &str, description: &str, points: u32, icon: Option<String>) -
         .map_err(|e| e.to_string())
 }
 
-/// A sample card, from the settings dialog, to see the popup in the current theme.
-#[tauri::command]
-pub fn preview_overlay(title: String, description: String) -> Result<(), String> {
-    show(&title, &description, 10, None)
-}
-
 /// Renders a card to a PNG, for looking at the design without a compositor.
 pub fn render_png(json: &str, path: &str, scale: f32) -> Result<(), String> {
     let popup: Popup = serde_json::from_str(json).map_err(|e| e.to_string())?;

@@ -1,7 +1,7 @@
 //! The card as a layer-shell surface: overlay layer, top-left corner, no keyboard focus and no
 //! input region, so the game keeps its controls and clicks go through.
 
-use super::draw::{self, CARD_H, CARD_W, PAD};
+use super::draw::{self, CARD_H, PAD, SURFACE_W};
 use super::Popup;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState, FrameCallbackData, Region},
@@ -22,7 +22,7 @@ use wayland_client::{
     Connection, QueueHandle,
 };
 
-const SLIDE: Duration = Duration::from_millis(320);
+const SLIDE: Duration = Duration::from_millis(450);
 
 struct Overlay {
     registry_state: RegistryState,
@@ -47,7 +47,7 @@ pub fn show(popup: &Popup, output: Option<&str>) -> Result<(), String> {
     let layer_shell = LayerShell::bind(&globals, &qh).map_err(|_| "this compositor has no layer-shell (GNOME or X11)".to_string())?;
     let shm = Shm::bind(&globals, &qh).map_err(|e| e.to_string())?;
 
-    let size = ((CARD_W + PAD * 2.0) * 3.0) as usize * ((CARD_H + PAD * 2.0) * 3.0) as usize * 4;
+    let size = (SURFACE_W * 3.0) as usize * ((CARD_H + PAD * 2.0) * 3.0) as usize * 4;
     let pool = SlotPool::new(size, &shm).map_err(|e| e.to_string())?;
     let mut overlay = Overlay {
         registry_state: RegistryState::new(&globals),
@@ -75,10 +75,10 @@ pub fn show(popup: &Popup, output: Option<&str>) -> Result<(), String> {
     }
     let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("portshelf-achievement"), target.as_ref());
     layer.set_anchor(Anchor::TOP | Anchor::LEFT);
-    layer.set_margin(24 - PAD as i32, 0, 0, 24 - PAD as i32);
+    layer.set_margin(24 - PAD as i32, 0, 0, 0);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.set_exclusive_zone(-1);
-    layer.set_size((CARD_W + PAD * 2.0) as u32, (CARD_H + PAD * 2.0) as u32);
+    layer.set_size(SURFACE_W as u32, (CARD_H + PAD * 2.0) as u32);
     layer.commit();
     overlay.layer = Some(layer);
     while !overlay.exit {

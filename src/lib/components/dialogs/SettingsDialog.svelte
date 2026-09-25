@@ -5,7 +5,6 @@
   import SystemLogo from "$lib/components/media/SystemLogo.svelte";
   import { prefs, tr } from "$lib/prefs.svelte";
   import { setFullscreen } from "$lib/fullscreen";
-  import { invoke } from "@tauri-apps/api/core";
   import { shelf } from "$lib/shelf.svelte";
   import { themes } from "$lib/themes";
   import { languages, type Key } from "$lib/i18n";
@@ -53,9 +52,6 @@
           </select>
         </label>
       </div>
-      <button class="tool small preview" onclick={() => invoke("preview_overlay", { title: tr("overlay.previewTitle"), description: tr("overlay.previewText") }).catch((e) => shelf.fail(e))}>
-        {tr("overlay.preview")}
-      </button>
     </section>
 
     <section>
@@ -98,7 +94,6 @@
   h2 { margin: 0 0 8px; }
   section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 16px; }
   h3 { margin: 0 0 12px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
-  .preview { margin-top: 4px; }
   .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
   small { color: var(--muted); font-size: 13px; }
   .split { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }

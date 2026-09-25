@@ -10,6 +10,11 @@ use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, PixmapPaint, Stroke
 pub const CARD_W: f32 = 440.0;
 pub const CARD_H: f32 = 112.0;
 pub const PAD: f32 = 18.0;
+/// Distance from the left edge of the screen to the card when it is in place. The surface
+/// starts at the screen edge, so the card can slide in from outside it.
+pub const LEFT: f32 = 24.0;
+/// Width of the surface: the gap to the screen edge, the card and its shadow margin.
+pub const SURFACE_W: f32 = LEFT + CARD_W + PAD;
 
 struct Fonts {
     title: Font,
@@ -163,18 +168,19 @@ fn draw_trophy(pixmap: &mut Pixmap, x: f32, y: f32, size: f32, color: Color, t: 
 /// Renders the card at scale `s` (device pixels per logical pixel). `progress` is 0 when the
 /// card is off to the left and invisible, 1 when fully shown.
 pub fn render(popup: &Popup, s: f32, progress: f32) -> Pixmap {
-    let (w, h) = (((CARD_W + PAD * 2.0) * s).ceil() as u32, ((CARD_H + PAD * 2.0) * s).ceil() as u32);
+    let (w, h) = ((SURFACE_W * s).ceil() as u32, ((CARD_H + PAD * 2.0) * s).ceil() as u32);
     let mut pixmap = Pixmap::new(w, h).expect("pixmap size");
     if progress <= 0.0 {
         return pixmap;
     }
     let f = fonts();
     let c = &popup.colors;
+    // Slides in from the left edge of the screen, decelerating, and back out the same way.
     let eased = 1.0 - (1.0 - progress).powi(3);
-    let alpha = eased;
-    let slide = (1.0 - eased) * -PAD;
+    let alpha = (progress * 2.5).min(1.0);
+    let slide = (1.0 - eased) * -SURFACE_W;
     let t = Transform::from_scale(s, s);
-    let (x0, y0) = (PAD + slide, PAD);
+    let (x0, y0) = (LEFT + slide, PAD);
 
     // Soft shadow: stacked, widening rounded rectangles.
     for i in 0..6 {

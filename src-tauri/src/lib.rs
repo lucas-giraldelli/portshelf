@@ -97,7 +97,6 @@ pub fn run() {
             port_settings::set_config,
             playtime::get_playtime,
             overlay::set_overlay_style,
-            overlay::preview_overlay,
             achievements::get_achievements,
             achievements::get_achievement_summary,
         ])
