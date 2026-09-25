@@ -8,7 +8,9 @@
 
 <header>
   <h1><img src="/icon.svg" alt="" width="34" height="34" draggable="false" />PortShelf</h1>
-  <button class="tool" onclick={onaddport} title={tr("add.hint")}>{tr("header.addPort")}</button>
+  <button class="tool square" onclick={onaddport} title={tr("add.hint")} aria-label={tr("add.title")}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+  </button>
   <button class="tool square" onclick={ontrophies} title={tr("ach.title")} aria-label={tr("ach.title")}><TrophyIcon size={20} /></button>
   <button class="tool square" onclick={onsettings} title={tr("settings.open")} aria-label={tr("settings.open")}>⚙</button>
   <button class="tool square" onclick={toggleFullscreen} title={tr(prefs.fullscreen ? "header.leaveFullscreen" : "header.fullscreen")} aria-label={tr(prefs.fullscreen ? "header.leaveFullscreen" : "header.fullscreen")}>
