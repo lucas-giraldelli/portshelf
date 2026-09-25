@@ -1,4 +1,4 @@
-// User preferences kept on this machine: theme, light / dark mode and language, plus the
+// User preferences kept on this machine: theme, light / dark mode, language and fullscreen, plus the
 // translate function every component uses for its text.
 
 import { applyTheme, themes, type Mode } from "$lib/themes";
@@ -16,6 +16,7 @@ export const prefs = $state({
   theme: stored("portshelf.theme") ?? "arcade",
   mode: ((stored("portshelf.mode") as Mode) ?? "dark") as Mode,
   lang: ((stored("portshelf.lang") as Lang) ?? defaultLang()) as Lang,
+  fullscreen: stored("portshelf.fullscreen") === "true",
 });
 
 /** Interface text in the chosen language. */
@@ -35,6 +36,7 @@ $effect.root(() => {
       localStorage.setItem("portshelf.theme", prefs.theme);
       localStorage.setItem("portshelf.mode", prefs.mode);
       localStorage.setItem("portshelf.lang", prefs.lang);
+      localStorage.setItem("portshelf.fullscreen", String(prefs.fullscreen));
     } catch {
       // not persisted; the preferences still apply for this session
     }

@@ -24,6 +24,7 @@
   import PortSettingsPanel from "$lib/components/panels/PortSettingsPanel.svelte";
   import { nextTheme, prefs, tr } from "$lib/prefs.svelte";
   import { shelf } from "$lib/shelf.svelte";
+  import { startFullscreenSync, toggleFullscreen } from "$lib/fullscreen";
   import type { Port } from "$lib/types";
 
   // ---- what is in view ----
@@ -168,6 +169,11 @@
   function onKey(e: KeyboardEvent) {
     inputMode = "keys";
     const inField = e.target instanceof HTMLInputElement;
+    if (e.key === "F11") {
+      e.preventDefault();
+      toggleFullscreen();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
       e.preventDefault();
       openOverlay({ kind: "search" });
@@ -225,6 +231,7 @@
   });
 
   shelf.load();
+  startFullscreenSync();
 </script>
 
 <svelte:window onkeydown={onKey} onmousedown={() => (inputMode = "keys")} onmousemove={(e) => { if (e.movementX || e.movementY) inputMode = "keys"; }} />

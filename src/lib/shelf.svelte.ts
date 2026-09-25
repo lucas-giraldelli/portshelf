@@ -9,6 +9,7 @@ import { tr } from "$lib/prefs.svelte";
 import type { Key } from "$lib/i18n";
 import type { Catalog, Library, Port, RomStatus } from "$lib/types";
 import type { Playtime } from "$lib/playtime";
+import { cancelLeave, leaveForGame } from "$lib/fullscreen";
 
 export type InstallProgress = { stage: string; done: number; total: number | null };
 export type RomSummary = { ready: number; installed: number; assigned: number };
@@ -317,10 +318,12 @@ class Shelf {
   }
 
   async play(port: Port) {
+    leaveForGame();
     try {
       await invoke("launch", { id: port.id });
       this.flash(tr("msg.started", { name: this.displayName(port) }));
     } catch (e) {
+      cancelLeave();
       this.fail(e);
     }
   }

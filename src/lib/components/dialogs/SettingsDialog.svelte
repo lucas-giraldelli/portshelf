@@ -4,6 +4,7 @@
   import Dialog from "$lib/components/ui/Dialog.svelte";
   import SystemLogo from "$lib/components/media/SystemLogo.svelte";
   import { prefs, tr } from "$lib/prefs.svelte";
+  import { setFullscreen } from "$lib/fullscreen";
   import { shelf } from "$lib/shelf.svelte";
   import { themes } from "$lib/themes";
   import { languages, type Key } from "$lib/i18n";
@@ -33,6 +34,13 @@
           <div class="segmented" role="radiogroup" aria-label={tr("settings.mode")}>
             <button role="radio" aria-checked={prefs.mode === "dark"} class:on={prefs.mode === "dark"} onclick={() => (prefs.mode = "dark")}>☾ {tr("settings.dark")}</button>
             <button role="radio" aria-checked={prefs.mode === "light"} class:on={prefs.mode === "light"} onclick={() => (prefs.mode = "light")}>☀ {tr("settings.light")}</button>
+          </div>
+        </div>
+        <div class="field">
+          <span>{tr("settings.display")}</span>
+          <div class="segmented" role="radiogroup" aria-label={tr("settings.display")}>
+            <button role="radio" aria-checked={!prefs.fullscreen} class:on={!prefs.fullscreen} onclick={() => setFullscreen(false)}>{tr("settings.windowed")}</button>
+            <button role="radio" aria-checked={prefs.fullscreen} class:on={prefs.fullscreen} onclick={() => setFullscreen(true)}>{tr("settings.fullscreen")}</button>
           </div>
         </div>
         <label class="field">

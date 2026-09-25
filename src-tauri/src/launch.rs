@@ -76,12 +76,13 @@ pub fn launch(app: tauri::AppHandle, id: String) -> Result<(), String> {
     }
     std::thread::spawn(move || {
         session.wait(&app_dir(), &id);
-        let _ = tauri::Emitter::emit(&app, "game-exited", &id);
+        // Shown first, so the interface can restore fullscreen on a mapped window.
         if let Some(w) = window {
             let _ = w.show();
             let _ = w.set_focus();
             gamepad::ACTIVE.store(true, std::sync::atomic::Ordering::Relaxed);
         }
+        let _ = tauri::Emitter::emit(&app, "game-exited", &id);
     });
     Ok(())
 }
