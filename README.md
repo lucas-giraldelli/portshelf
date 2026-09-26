@@ -13,7 +13,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - Installs ports from their GitHub or GitLab releases
 - Opens each port on its own launcher, with the game file already in place, and in fullscreen when the shelf is
 - Records your time played
-- Its own achievements, starting with Banjo-Kazooie
+- Its own achievements, starting with Banjo-Kazooie, with an in-game popup in the shelf's theme (Linux)
 - Checks that your game file is the release each port needs, including zip and 7z archives
 - Organises your ROM folder by system and game, and picks up new files on its own
 - Edits the settings of RecompFrontend ports
@@ -21,6 +21,15 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 - Search across every system and a list of every known port with links to each project
 - Four colour themes, each with a light and a dark mode; fullscreen stays on when games open and close
 - English and Brazilian Portuguese
+
+## Download
+
+Get the latest release from the [releases page](https://github.com/lucas-giraldelli/portshelf/releases/latest):
+
+- Linux (x86_64): `PortShelf_<version>_amd64.AppImage`. Make it executable (`chmod +x`) and run it.
+- Windows (x64): `PortShelf_<version>_x64-setup.exe`. The installer is not signed yet, so SmartScreen may warn before running it ("More info", then "Run anyway"); see [docs/installer-trust.md](docs/installer-trust.md).
+
+Achievements are Linux only for now. A few ports are made for one operating system only, and the shelf marks them as such.
 
 ## Controls
 
@@ -53,6 +62,7 @@ Controllers are read natively with gilrs, so they work where the webview has no 
 | Library (installed ports and how to start them) | `~/.config/portshelf/library.json` |
 | Cover art | `~/.config/portshelf/covers/<port id>.png` (replaced covers are kept in `covers/replaced/`) |
 | Time played | `~/.config/portshelf/playtime.json` |
+| Unlocked achievements | `~/.config/portshelf/achievements.json` |
 | Cover index, downloads and unpacked archives | `~/.cache/portshelf/` |
 | Game files | the ROM folder you choose, organised as `<system>/<game>/` |
 | Game file handed to a recompilation port | the port's own folder, `~/.config/<program_id>/<game_id>.z64` (Windows: `%LOCALAPPDATA%\<program_id>`) |
@@ -69,6 +79,8 @@ Cover art comes from [libretro-thumbnails](https://github.com/libretro-thumbnail
 - `recomp`: for N64: Recompiled ports, the `program_id` and `game_id` read from each project's source. The port keeps its settings in `~/.config/<program_id>` on Linux (`%LOCALAPPDATA%\<program_id>` on Windows) and looks for the ROM there as `<game_id>.z64`, so PortShelf places the checked ROM exactly where the port's own launcher finds it
 - `rom`: the release of the game the port needs, with the hashes of the accepted files (`xxh3:`, `sha1:`, `md5:` or `sha256:`)
 - `codes` (N64 game codes such as `NDOE`, GameCube IDs such as `GZ2E`), `authors`, `platforms` for ports made only for another operating system, and a cartridge colour
+
+`catalog/achievements/<port id>.json` holds a port's achievement set: memory conditions checked against the running game, with titles and descriptions in each language. [docs/achievements/](docs/achievements/) keeps the research notes behind each set.
 
 Only ports that need the player's own game are listed. The list was put together from [PCGamingWiki's list of unofficial ports](https://www.pcgamingwiki.com/wiki/List_of_unofficial_ports) and [awesome-unofficial-pc-ports](https://github.com/Sebastrion/awesome-unofficial-pc-ports).
 
@@ -95,6 +107,8 @@ src-tauri/src/
   roms.rs                   game file status, handing files to ports, the ROM folder
   launch.rs  playtime.rs    starting a port; time played
   covers.rs  port_settings.rs  paths.rs
+  achievements/             achievement sets, checked against the running game's memory
+  overlay/                  the achievement popup drawn over the game (Wayland)
   install.rs  romscan.rs  scrape.rs  gamepad.rs   downloads, game file identification, cover search, controller
 ```
 
@@ -106,6 +120,12 @@ Requirements: Rust, Node.js, pnpm and, on Linux, WebKitGTK 4.1.
 pnpm install
 pnpm app      # development build; also rebuilds when catalog/ changes
 pnpm bundle   # AppImage in src-tauri/target/release/bundle/appimage/
+```
+
+The Windows installer can be built from Linux with [cargo-xwin](https://github.com/rust-cross/cargo-xwin) and NSIS (`rustup target add x86_64-pc-windows-msvc`):
+
+```bash
+pnpm tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc
 ```
 
 Programs started from the AppImage (ports and the file manager) get a clean environment, without the AppImage's bundled library and data paths. On Linux the app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for itself, which avoids a Wayland protocol error with NVIDIA drivers. `pnpm bundle` sets `NO_STRIP`, needed on distributions whose libraries are newer than the `strip` bundled with linuxdeploy. The development window is titled `PortShelf (dev)`, so a window manager rule can tell it apart from the installed app.
