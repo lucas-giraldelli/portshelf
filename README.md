@@ -8,9 +8,9 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 ## Features
 
-- 67 ports across eleven systems, from Arcade and NES to Xbox 360 and Wii
+- 68 ports across eleven systems, from Arcade and NES to Xbox 360 and Wii
 - Browse systems, then games, with the keyboard, a controller or the mouse
-- Installs ports from their GitHub or GitLab releases
+- Installs ports from their GitHub or GitLab releases; the list of ports updates itself, without a new PortShelf release
 - Opens each port on its own launcher, with the game file already in place, and in fullscreen when the shelf is
 - Records your time played
 - Its own achievements, starting with Banjo-Kazooie, with an in-game popup in the shelf's theme (Linux)
@@ -63,7 +63,7 @@ Controllers are read natively with gilrs, so they work where the webview has no 
 | Cover art | `~/.config/portshelf/covers/<port id>.png` (replaced covers are kept in `covers/replaced/`) |
 | Time played | `~/.config/portshelf/playtime.json` |
 | Unlocked achievements | `~/.config/portshelf/achievements.json` |
-| Cover index, downloads and unpacked archives | `~/.cache/portshelf/` |
+| Cover index, downloads, unpacked archives and the latest catalog | `~/.cache/portshelf/` |
 | Game files | the ROM folder you choose, organised as `<system>/<game>/` |
 | Game file handed to a recompilation port | the port's own folder, `~/.config/<program_id>/<game_id>.z64` (Windows: `%LOCALAPPDATA%\<program_id>`) |
 
@@ -81,6 +81,8 @@ Cover art comes from [libretro-thumbnails](https://github.com/libretro-thumbnail
 - `codes` (N64 game codes such as `NDOE`, GameCube IDs such as `GZ2E`), `authors`, `platforms` for ports made only for another operating system, and a cartridge colour
 
 `catalog/achievements/<port id>.json` holds a port's achievement set: memory conditions checked against the running game, with titles and descriptions in each language. [docs/achievements/](docs/achievements/) keeps the research notes behind each set.
+
+A copy of the catalog is bundled with each release, and on start PortShelf downloads the newest one from this repository's `main` branch, with the achievement sets it lists. A downloaded catalog is only used when this build can read it (same `version`, every entry valid), so a change merged here reaches every install without a new release; `cargo test` runs the same checks.
 
 Only ports that need the player's own game are listed. The list was put together from [PCGamingWiki's list of unofficial ports](https://www.pcgamingwiki.com/wiki/List_of_unofficial_ports) and [awesome-unofficial-pc-ports](https://github.com/Sebastrion/awesome-unofficial-pc-ports).
 
