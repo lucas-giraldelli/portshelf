@@ -94,7 +94,7 @@
     : shelf.isInstalled(game.id) ? (shelf.romReady(game.id) ? (shelf.selfManaged(game.id) ? tr("game.start") : tr("game.play")) : tr(shelf.isDisc(game) ? "game.selectDisc" : "game.selectFile"))
     : game.available === false ? tr("game.notAvailable")
     : shelf.unavailable(game) ? tr("game.projectPage")
-    : shelf.canInstall(game) ? tr("game.install") : tr("game.getIt"));
+    : shelf.canInstall(game) ? tr("game.install") : tr("game.projectPage"));
 
   const clamp = (i: number, n: number) => Math.max(0, Math.min(n - 1, i));
   const wrap = (i: number, n: number) => (n ? ((i % n) + n) % n : 0);

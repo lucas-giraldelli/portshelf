@@ -104,12 +104,13 @@
     {:else if shelf.unavailable(port)}
       <button class="primary" disabled>{shelf.platformLabel(port)}</button>
     {:else}
-      <button class="primary" onclick={onconfirm}>{shelf.canInstall(port) ? tr("game.install") : tr("game.getIt")}</button>
+      <button class="primary" onclick={onconfirm}>{shelf.canInstall(port) ? tr("game.install") : tr("game.projectPage")}</button>
     {/if}
     {#if achievements}
       <button class="ghost ach" onclick={onachievements}><TrophyIcon size={18} /> {tr("ach.button", { n: achievements.unlocked, total: achievements.total })}</button>
     {/if}
-    {#if port.available !== false}<button class="ghost" onclick={() => openUrl(port.repo)}>{tr("game.projectPage")}</button>{/if}
+    <!-- Ports PortShelf cannot install already lead to their page with the main button. -->
+    {#if port.available !== false && (installed || progress || shelf.unavailable(port) || shelf.canInstall(port))}<button class="ghost" onclick={() => openUrl(port.repo)}>{tr("game.projectPage")}</button>{/if}
   </div>
   <div class="actions small">
     <button class="link" onclick={() => shelf.pickCover(port)}>{tr("game.chooseCover")}</button>
