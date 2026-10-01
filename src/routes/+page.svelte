@@ -12,6 +12,7 @@
   import Carousel from "$lib/components/shelf/Carousel.svelte";
   import SystemCaption from "$lib/components/shelf/SystemCaption.svelte";
   import GameCaption from "$lib/components/shelf/GameCaption.svelte";
+  import VersionLink from "$lib/components/shelf/VersionLink.svelte";
   import ControlHints from "$lib/components/shelf/ControlHints.svelte";
   import Cartridge from "$lib/components/media/Cartridge.svelte";
   import Disc from "$lib/components/media/Disc.svelte";
@@ -304,6 +305,7 @@
   </div>
 
   <ControlHints {view} pad={inputMode === "pad"} primary={primaryLabel} {showAll} />
+  <VersionLink />
 </main>
 
 {#if overlay?.kind === "quit"}
@@ -326,7 +328,7 @@
 
 <style>
   main {
-    height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; padding: 16px 28px;
+    position: relative; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; padding: 16px 28px;
     background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--system) 30%, transparent), transparent 65%), var(--bg);
     transition: background 0.4s ease;
   }
