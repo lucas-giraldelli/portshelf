@@ -59,6 +59,18 @@
   /** Where a game sits on its system's shelf, whichever of its ports is shown. */
   const indexOf = (port: Port | undefined, s = system) => (port ? (s?.ports.findIndex((p) => shelf.gameKey(p) === shelf.gameKey(port)) ?? -1) : -1);
 
+  /** Where a system opens: on its most recently played game, any of whose ports counts. */
+  function startIndex(s = system) {
+    let best = 0, latest = 0;
+    s?.ports.forEach((p, i) => {
+      for (const v of shelf.variantsOf(p)) {
+        const last = shelf.playtime[v.id]?.last_played ?? 0;
+        if (last > latest) [best, latest] = [i, last];
+      }
+    });
+    return best;
+  }
+
   /** Shows another port of the game in view; the choice is remembered. */
   function chooseVariant(port: Port) {
     shelf.chooseVariant(port);
@@ -153,7 +165,7 @@
   function switchSystem(delta: number) {
     if (view !== "games") return;
     systemIndex = wrap(systemIndex + delta, systems.length);
-    gameIndex = 0;
+    gameIndex = startIndex(systems[systemIndex]);
   }
   /** Installed only or every known port. The list of systems changes (systems with no
    *  installed port appear or disappear), so the system and game in view are kept by id. */
@@ -171,7 +183,7 @@
     if (view === "systems") {
       if (!system) return;
       view = "games";
-      gameIndex = 0;
+      gameIndex = startIndex();
       return;
     }
     if (!game) return;
