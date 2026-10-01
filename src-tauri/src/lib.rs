@@ -24,6 +24,7 @@ mod ports;
 mod roms;
 mod romscan;
 mod scrape;
+mod update;
 
 /// Closes the shelf (Esc on the systems screen, then Yes).
 #[tauri::command]
@@ -61,6 +62,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             gamepad::spawn(app.handle().clone());
+            update::spawn(app.handle().clone());
             // Tiling compositors draw no title bar, so GTK adds its own buttons; drop them on
             // Linux. Windows and macOS keep their native title bar.
             if let Some(window) = tauri::Manager::get_webview_window(app, "main") {

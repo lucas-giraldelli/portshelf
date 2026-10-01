@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod memory;
 
-/// Sets bundled with PortShelf, by port id.
+/// Sets bundled with PortShelf, by port id. Newer ones are downloaded with the catalog.
 const SETS: &[(&str, &str)] = &[("bk", include_str!("../../../catalog/achievements/bk.json"))];
 
 #[derive(Deserialize, Clone, Debug)]
@@ -76,8 +76,20 @@ fn all_hold(conditions: &[Condition], ram: &mut memory::N64Ram) -> Option<bool> 
 }
 
 pub fn set_for(port: &str) -> Option<Set> {
+    // Reading a game's memory is only done on Linux so far.
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    if let Some(set) = crate::update::cached(&format!("achievements/{port}.json")).and_then(|text| parse(&text).ok()) {
+        return Some(set);
+    }
     let (_, json) = SETS.iter().find(|(id, _)| *id == port)?;
-    serde_json::from_str(json).map_err(|e| eprintln!("achievements for {port}: {e}")).ok()
+    parse(json).map_err(|e| eprintln!("achievements for {port}: {e}")).ok()
+}
+
+/// A set as written in its JSON file.
+pub fn parse(json: &str) -> Result<Set, String> {
+    serde_json::from_str(json).map_err(|e| e.to_string())
 }
 
 /// Unlock times (Unix seconds) per port and achievement.
@@ -185,8 +197,12 @@ pub struct Summary {
 #[tauri::command]
 pub fn get_achievement_summary() -> Vec<Summary> {
     let unlocked = load_unlocked();
-    SETS.iter()
-        .filter_map(|(id, _)| set_for(id))
+    let catalog = crate::catalog::current();
+    catalog["achievements"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|id| set_for(id.as_str()?))
         .map(|set| {
             let times = unlocked.get(&set.port);
             let got: Vec<&Achievement> = set.achievements.iter().filter(|a| times.is_some_and(|t| t.contains_key(&a.id))).collect();
@@ -208,8 +224,10 @@ mod tests {
 
     #[test]
     fn bundled_sets_parse() {
-        for (id, _) in SETS {
-            let set = set_for(id).expect("set parses");
+        let listed = crate::catalog::bundled()["achievements"].clone();
+        for (id, json) in SETS {
+            assert!(listed.as_array().unwrap().iter().any(|l| l == id), "{id} is not listed in the catalog");
+            let set = parse(json).expect("set parses");
             assert_eq!(&set.port, id);
             assert!(!set.achievements.is_empty());
             for a in &set.achievements {

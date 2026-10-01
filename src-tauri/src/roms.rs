@@ -155,7 +155,7 @@ pub fn select_rom(id: String, path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn assign_rom(path: String) -> Result<Vec<String>, String> {
     let lib = library::load()?;
-    let catalog = catalog::bundled();
+    let catalog = catalog::current();
     // An archive is identified by the game file inside it, unpacked to the cache first;
     // select_rom then unpacks it again into the game's own folder.
     let (archive, path) = if romscan::is_archive(Path::new(&path)) {
@@ -202,7 +202,7 @@ fn create_game_folders(root: &Path, catalog: &Value) -> Result<(), String> {
 /// Chooses the ROM folder and creates <system>/<game>/ for every game in the catalog.
 #[tauri::command]
 pub async fn set_roms_dir(dir: String) -> Result<RomSummary, String> {
-    create_game_folders(Path::new(&dir), &catalog::bundled())?;
+    create_game_folders(Path::new(&dir), &catalog::current())?;
     library::update(|lib| lib.roms_dir = dir)?;
     sync_roms().await
 }
@@ -217,7 +217,7 @@ pub async fn sync_roms() -> Result<RomSummary, String> {
         return Ok(RomSummary { ready: 0, installed: lib.installed.len(), assigned: 0 });
     }
     let root = PathBuf::from(&lib.roms_dir);
-    let catalog = catalog::bundled();
+    let catalog = catalog::current();
     // Games added to the catalog since the folder was chosen get their folder too.
     let _ = create_game_folders(&root, &catalog);
     let found = {

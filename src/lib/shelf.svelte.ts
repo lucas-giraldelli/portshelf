@@ -59,6 +59,8 @@ class Shelf {
       this.loadPlaytime();
       this.loadAchievements();
     });
+    // A newer catalog was downloaded: new ports, install rules and achievement sets.
+    listen("catalog-updated", () => this.reloadCatalog());
     listen<InstallProgress & { id: string }>("install-progress", (e) => {
       this.installing[e.payload.id] = e.payload;
     });
@@ -126,6 +128,19 @@ class Shelf {
       this.scrapeMissing();
       await this.syncRoms();
       await this.refreshInstalledRoms();
+    } catch (e) {
+      this.fail(e);
+    }
+  }
+
+  async reloadCatalog() {
+    if (!this.catalog) return; // still loading: load() reads the new catalog itself
+    try {
+      this.catalog = await invoke<Catalog>("get_catalog");
+      this.loadAchievements();
+      await Promise.all(this.catalog.ports.filter((port) => !(port.id in this.covers)).map((port) => this.loadCover(port.id)));
+      this.scrapeMissing();
+      await this.syncRoms();
     } catch (e) {
       this.fail(e);
     }

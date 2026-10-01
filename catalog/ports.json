@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "achievements": ["bk"],
   "consoles": {
     "n64":  { "name": "Nintendo 64",  "media": "cartridge", "color": "#3b3b3b", "year": 1996 },
     "gc":   { "name": "GameCube",     "media": "disc",      "color": "#5a4fcf", "year": 2001 },

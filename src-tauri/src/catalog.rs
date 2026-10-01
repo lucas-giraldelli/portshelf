@@ -1,5 +1,7 @@
-//! The port catalog (`catalog/ports.json`, bundled into the program) and the install section
-//! of its entries: where a port keeps its settings and how it expects its game file.
+//! The port catalog (`catalog/ports.json`) and the install section of its entries: where a port
+//! keeps its settings and how it expects its game file. A copy is bundled into the program; the
+//! newest one is downloaded from the project's repository on start (see `update`), so new ports
+//! reach every install without a new release.
 
 use crate::library::{self, BootSetting, RomSpec};
 use crate::paths::{expand, home};
@@ -7,20 +9,55 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-const CATALOG: &str = include_str!("../../catalog/ports.json");
+const BUNDLED: &str = include_str!("../../catalog/ports.json");
 
-/// The catalog as shipped, without the ports the user added.
+/// Catalog format this build understands; a downloaded catalog with another `version` is left
+/// aside, so a format change never reaches builds that cannot read it.
+pub const FORMAT: u64 = 1;
+
+/// The catalog as shipped with this build.
 pub fn bundled() -> Value {
-    serde_json::from_str(CATALOG).expect("catalog/ports.json is valid JSON")
+    serde_json::from_str(BUNDLED).expect("catalog/ports.json is valid JSON")
+}
+
+/// The newest catalog: the downloaded one when it is usable, the bundled one otherwise.
+pub fn current() -> Value {
+    crate::update::cached("ports.json")
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .filter(|c| validate(c).is_ok())
+        .unwrap_or_else(bundled)
 }
 
 /// The catalog plus the ports the user added themselves.
 pub fn full() -> Value {
-    let mut catalog = bundled();
+    let mut catalog = current();
     if let (Ok(lib), Some(ports)) = (library::load(), catalog["ports"].as_array_mut()) {
         ports.extend(lib.custom);
     }
     catalog
+}
+
+/// Checks that a catalog can be used by this build: its format, a known system for every port,
+/// no repeated ids, and install sections this build can read.
+pub fn validate(catalog: &Value) -> Result<(), String> {
+    if catalog["version"].as_u64() != Some(FORMAT) {
+        return Err(format!("catalog format {} (this build reads {FORMAT})", catalog["version"]));
+    }
+    let list = catalog["ports"].as_array().ok_or("the catalog has no ports")?;
+    let mut ids = std::collections::HashSet::new();
+    for port in list {
+        let id = port["id"].as_str().ok_or("a port has no id")?;
+        if !ids.insert(id) {
+            return Err(format!("{id} appears twice"));
+        }
+        if !catalog["consoles"][port["console"].as_str().unwrap_or_default()].is_object() {
+            return Err(format!("{id}: unknown system"));
+        }
+        if !port["install"].is_null() {
+            serde_json::from_value::<InstallSpec>(port["install"].clone()).map_err(|e| format!("{id}: {e}"))?;
+        }
+    }
+    Ok(())
 }
 
 /// Every port of a catalog.
@@ -136,15 +173,6 @@ mod tests {
 
     #[test]
     fn every_port_is_well_formed() {
-        let catalog = bundled();
-        let mut ids = std::collections::HashSet::new();
-        for port in ports(&catalog) {
-            let id = port["id"].as_str().expect("every port has an id");
-            assert!(ids.insert(id.to_string()), "{id} appears twice");
-            assert!(catalog["consoles"][port["console"].as_str().unwrap_or_default()].is_object(), "{id}: unknown system");
-            if !port["install"].is_null() {
-                serde_json::from_value::<InstallSpec>(port["install"].clone()).unwrap_or_else(|e| panic!("{id}: {e}"));
-            }
-        }
+        validate(&bundled()).unwrap();
     }
 }
