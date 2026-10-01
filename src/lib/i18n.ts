@@ -32,7 +32,7 @@ const en = {
   // game view
   "kind.recomp": "Static recompilation",
   "kind.decomp": "Decompilation",
-  "kind.build": "Builds from your ROM",
+  "kind.build": "Port builder",
   "kind.remake": "Remake",
   "kind.custom": "Added by you",
   "game.by": "by {authors}",
@@ -196,7 +196,7 @@ const ptBR: Record<Key, string> = {
   "systems.known": "{count} conhecidos",
   "kind.recomp": "Recompilação estática",
   "kind.decomp": "Decompilação",
-  "kind.build": "Gerado a partir da sua ROM",
+  "kind.build": "Construtor de port",
   "kind.remake": "Recriação",
   "kind.custom": "Adicionado por você",
   "game.by": "por {authors}",

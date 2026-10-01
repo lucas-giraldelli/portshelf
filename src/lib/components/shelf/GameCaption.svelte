@@ -70,7 +70,7 @@
         </select>
       </span>
     {/if}
-    <span class="meta-text">{#if variants.length > 1}· {/if}{#if shelf.library?.overrides?.[port.id]?.name}{port.name} · {/if}{shelf.kindLabel(port.kind)}{#if shelf.authorsOf(port)} · {tr("game.by", { authors: shelf.authorsOf(port) })}{/if}{installed ? "" : ` · ${tr("game.notInstalled")}`}
+    <span class="meta-text">{#if shelf.library?.overrides?.[port.id]?.name}{port.name} · {/if}{shelf.kindLabel(port.kind)}{#if shelf.authorsOf(port)} · {tr("game.by", { authors: shelf.authorsOf(port) })}{/if}{installed ? "" : ` · ${tr("game.notInstalled")}`}
   </span>
   </p>
   <!-- One slot of fixed height for what changes from game to game, so the shelf above never moves. -->
@@ -125,9 +125,9 @@
   .name, .meta-text, .status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   p { margin: 4px 0; color: var(--muted); font-size: 17px; }
   .system { height: 22px; margin-bottom: 6px; }
-  .meta { max-width: 100%; height: 34px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .meta { max-width: 100%; height: 34px; display: flex; align-items: center; justify-content: center; gap: 12px; }
   .meta-text { min-width: 0; }
-  .variant { display: inline-flex; flex: none; }
+  .variant { display: inline-flex; flex: none; margin: 0; }
   .variant select { height: 30px; padding-block: 0; line-height: 28px; font-size: 14px; }
   .slot { height: 68px; width: 100%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
   .slot p { margin: 2px 0; }
