@@ -35,6 +35,14 @@ function decode(src: string) {
   return img.decode().catch(() => {});
 }
 
+function readJson<T>(key: string): T | null {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
 class Shelf {
   catalog = $state<Catalog | null>(null);
   library = $state<Library | null>(null);
@@ -49,6 +57,8 @@ class Shelf {
   romSummary = $state<RomSummary | null>(null);
   syncing = $state(false);
   os = $state("linux");
+  /** The port last chosen for each game that has more than one (game key → port id). */
+  variantChoice = $state<Record<string, string>>(readJson("portshelf.variants") ?? {});
   error = $state("");
   status = $state("");
 
@@ -69,6 +79,31 @@ class Shelf {
   }
 
   // ---- queries ----
+
+  /** Ports of the same game on the same system share a key: the title without region or "The". */
+  gameKey = (port: Port) =>
+    `${port.console}:${(port.title ?? port.name)
+      .replace(/\([^)]*\)/g, "")
+      .toLowerCase()
+      .replace(/^the |, the\b/g, "")
+      .replace(/[^a-z0-9]+/g, "")}`;
+  /** Every port of the same game, installed first. */
+  variantsOf = (port: Port) => {
+    const key = this.gameKey(port);
+    return (this.catalog?.ports ?? [])
+      .filter((p) => this.gameKey(p) === key)
+      .sort((a, b) => Number(this.isInstalled(b.id)) - Number(this.isInstalled(a.id)) || a.name.localeCompare(b.name));
+  };
+  /** What tells a game's ports apart: the project in the name's parentheses, or the repository. */
+  variantLabel = (port: Port) => port.name.match(/\(([^)]+)\)\s*$/)?.[1] ?? port.repo.split("/").filter(Boolean).pop() ?? port.name;
+  chooseVariant(port: Port) {
+    this.variantChoice[this.gameKey(port)] = port.id;
+    try {
+      localStorage.setItem("portshelf.variants", JSON.stringify(this.variantChoice));
+    } catch {
+      // not persisted; the choice still holds for this session
+    }
+  }
 
   isInstalled = (id: string) => !!this.library?.installed[id];
   displayName = (port: Port) => this.library?.overrides?.[port.id]?.name ?? port.name;

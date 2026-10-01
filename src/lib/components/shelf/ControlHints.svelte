@@ -3,7 +3,7 @@
   import PadGlyph from "$lib/components/ui/PadGlyph.svelte";
   import { tr } from "$lib/prefs.svelte";
 
-  let { view, pad, primary, showAll }: { view: "systems" | "games"; pad: boolean; primary: string; showAll: boolean } = $props();
+  let { view, pad, primary, showAll, variants = false }: { view: "systems" | "games"; pad: boolean; primary: string; showAll: boolean; variants?: boolean } = $props();
   let games = $derived(view === "games");
   let toggle = $derived(showAll ? tr("footer.installedOnly") : tr("footer.everyPort"));
 </script>
@@ -12,6 +12,7 @@
   {#if pad}
     <span><PadGlyph button="east" /> {games ? tr("footer.systems") : tr("footer.quit")}</span>
     <span><PadGlyph button="dpad" /> {tr("footer.browse")}</span>
+    {#if variants}<span><kbd class="pad">↑</kbd><kbd class="pad">↓</kbd> {tr("footer.version")}</span>{/if}
     <span><PadGlyph button="south" /> {primary}</span>
     <span><PadGlyph button="north" /> {tr("footer.achievements")}</span>
     <span><PadGlyph button="west" /> {tr("footer.known")}</span>
@@ -24,6 +25,7 @@
     <span><kbd>Esc</kbd> {games ? tr("footer.systems") : tr("footer.quit")}</span>
     {#if !games}<span><kbd>O</kbd> {tr("footer.options")}</span>{/if}
     <span><kbd>←</kbd><kbd>→</kbd> {tr("footer.browse")}</span>
+    {#if variants}<span><kbd>↑</kbd><kbd>↓</kbd> {tr("footer.version")}</span>{/if}
     <span><kbd>Enter</kbd> {primary}</span>
     {#if games}
       <span><kbd>S</kbd> {tr("footer.settings")}</span>

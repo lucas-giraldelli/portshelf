@@ -42,16 +42,34 @@
     if (!catalog) return [];
     return Object.entries(catalog.consoles)
       .map(([id, info]) => {
-        const ports = catalog.ports
-          .filter((p) => p.console === id && (showAll || shelf.isInstalled(p.id)))
-          .sort((a, b) => Number(shelf.isInstalled(b.id)) - Number(shelf.isInstalled(a.id)) || a.name.localeCompare(b.name));
-        return { id, info, ports, installed: ports.filter((p) => shelf.isInstalled(p.id)).length };
+        const visible = catalog.ports.filter((p) => p.console === id && (showAll || shelf.isInstalled(p.id)));
+        // One cartridge per game: the port last chosen for it, or an installed one.
+        const groups = new Map<string, Port[]>();
+        for (const p of visible) groups.set(shelf.gameKey(p), [...(groups.get(shelf.gameKey(p)) ?? []), p]);
+        const ports = [...groups.entries()]
+          .map(([key, list]) => list.find((p) => p.id === shelf.variantChoice[key]) ?? list.find((p) => shelf.isInstalled(p.id)) ?? list[0])
+          .sort((a, b) => Number(shelf.isInstalled(b.id)) - Number(shelf.isInstalled(a.id)) || shelf.gameKey(a).localeCompare(shelf.gameKey(b)));
+        return { id, info, ports, installed: visible.filter((p) => shelf.isInstalled(p.id)).length };
       })
       .filter((s) => s.ports.length > 0)
       .sort((a, b) => a.info.year - b.info.year || a.info.name.localeCompare(b.info.name));
   });
   let system = $derived(systems[systemIndex]);
   let game = $derived(system?.ports[gameIndex]);
+  /** Where a game sits on its system's shelf, whichever of its ports is shown. */
+  const indexOf = (port: Port | undefined, s = system) => (port ? (s?.ports.findIndex((p) => shelf.gameKey(p) === shelf.gameKey(port)) ?? -1) : -1);
+
+  /** Shows another port of the game in view; the choice is remembered. */
+  function chooseVariant(port: Port) {
+    shelf.chooseVariant(port);
+    gameIndex = Math.max(0, indexOf(port));
+  }
+  function cycleVariant(delta: number) {
+    if (view !== "games" || !game) return;
+    const list = shelf.variantsOf(game).filter((p) => showAll || shelf.isInstalled(p.id));
+    if (list.length < 2) return;
+    chooseVariant(list[wrap(list.findIndex((p) => p.id === game!.id) + delta, list.length)]);
+  }
 
   $effect(() => {
     if (view === "games" && game) shelf.refreshRom(game);
@@ -119,8 +137,9 @@
   function showOnShelf(port: Port) {
     if (!shelf.isInstalled(port.id)) showAll = true;
     overlay = null;
+    shelf.chooseVariant(port);
     systemIndex = Math.max(0, systems.findIndex((s) => s.id === port.console));
-    gameIndex = Math.max(0, systems[systemIndex]?.ports.findIndex((p) => p.id === port.id) ?? 0);
+    gameIndex = Math.max(0, indexOf(port, systems[systemIndex]));
     view = "games";
   }
 
@@ -140,12 +159,11 @@
    *  installed port appear or disappear), so the system and game in view are kept by id. */
   function toggleAll() {
     const systemId = system?.id;
-    const gameId = game?.id;
+    const current = game;
     showAll = !showAll;
     const s = systems.findIndex((x) => x.id === systemId);
     systemIndex = s >= 0 ? s : clamp(systemIndex, systems.length);
-    const g = systems[systemIndex]?.ports.findIndex((p) => p.id === gameId) ?? -1;
-    gameIndex = g >= 0 ? g : 0;
+    gameIndex = Math.max(0, indexOf(current, systems[systemIndex]));
   }
 
   async function confirm() {
@@ -163,7 +181,7 @@
       else await shelf.selectRom(port);
     } else if (!shelf.unavailable(port) && shelf.canInstall(port)) {
       // Installed ports sort first; keep the focus on the one just installed.
-      if (await shelf.installPort(port)) gameIndex = Math.max(0, system?.ports.findIndex((p) => p.id === port.id) ?? 0);
+      if (await shelf.installPort(port)) gameIndex = Math.max(0, indexOf(port));
     } else if (port.available !== false) openUrl(port.repo);
   }
 
@@ -191,7 +209,7 @@
 
   function onKey(e: KeyboardEvent) {
     inputMode = "keys";
-    const inField = e.target instanceof HTMLInputElement;
+    const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
     if (e.key === "F11") {
       e.preventDefault();
       toggleFullscreen();
@@ -213,6 +231,7 @@
     if (inField) return;
     const actions: Record<string, () => void> = {
       ArrowLeft: () => move(-1), ArrowRight: () => move(1), a: () => move(-1), d: () => move(1),
+      ArrowUp: () => cycleVariant(-1), ArrowDown: () => cycleVariant(1),
       Enter: confirm, " ": confirm, Escape: back, Backspace: back, Tab: toggleAll,
       s: openPortSettings, r: () => view === "games" && caption?.startRename(),
       i: () => shelf.chooseSystemFile(system?.id),
@@ -239,7 +258,7 @@
       return;
     }
     const actions: Record<string, () => void> = {
-      left: () => move(-1), right: () => move(1), a: confirm, b: back,
+      left: () => move(-1), right: () => move(1), up: () => cycleVariant(-1), down: () => cycleVariant(1), a: confirm, b: back,
       y: openAchievements,
       x: () => system && openOverlay({ kind: "known", console: system.id }),
       lt: openContextSettings,
@@ -298,13 +317,14 @@
           {/snippet}
         </Carousel>
         {#if game}
-          <GameCaption bind:this={caption} port={game} systemId={system.id} system={system.info} onconfirm={confirm} onsettings={openPortSettings} onachievements={() => game && openOverlay({ kind: "achievements", port: game })} />
+          <GameCaption bind:this={caption} port={game} systemId={system.id} system={system.info} onconfirm={confirm} onsettings={openPortSettings} onachievements={() => game && openOverlay({ kind: "achievements", port: game })} onvariant={chooseVariant} {showAll} />
         {/if}
       </div>
     {/if}
   </div>
 
-  <ControlHints {view} pad={inputMode === "pad"} primary={primaryLabel} {showAll} />
+  <ControlHints {view} pad={inputMode === "pad"} primary={primaryLabel} {showAll}
+    variants={view === "games" && !!game && shelf.variantsOf(game).filter((p) => showAll || shelf.isInstalled(p.id)).length > 1} />
   <VersionLink />
 </main>
 

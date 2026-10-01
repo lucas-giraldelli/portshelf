@@ -16,7 +16,14 @@
     onconfirm,
     onsettings,
     onachievements,
-  }: { port: Port; systemId: string; system: Console; onconfirm: () => void; onsettings: () => void; onachievements: () => void } = $props();
+    onvariant,
+    showAll,
+  }: {
+    port: Port; systemId: string; system: Console; showAll: boolean;
+    onconfirm: () => void; onsettings: () => void; onachievements: () => void; onvariant: (port: Port) => void;
+  } = $props();
+  /** Other ports of the same game that can be shown instead (installed ones only, unless every port is). */
+  let variants = $derived(shelf.variantsOf(port).filter((p) => showAll || shelf.isInstalled(p.id)));
   let achievements = $derived(shelf.achievements[port.id]);
 
   let installed = $derived(shelf.isInstalled(port.id));
@@ -53,6 +60,16 @@
     </h2>
   {/if}
   <p class="meta">
+    {#if variants.length > 1}
+      <span class="field variant">
+        <select value={port.id} aria-label={tr("game.version")} title={tr("game.versionHint")}
+          onchange={(e) => { const next = variants.find((p) => p.id === e.currentTarget.value); if (next) onvariant(next); e.currentTarget.blur(); }}>
+          {#each variants as v (v.id)}
+            <option value={v.id}>{shelf.variantLabel(v)}{shelf.isInstalled(v.id) ? " ✓" : ""}</option>
+          {/each}
+        </select>
+      </span> ·
+    {/if}
     {#if shelf.library?.overrides?.[port.id]?.name}{port.name} · {/if}{shelf.kindLabel(port.kind)}{#if shelf.authorsOf(port)} · {tr("game.by", { authors: shelf.authorsOf(port) })}{/if}{installed ? "" : ` · ${tr("game.notInstalled")}`}
   </p>
   <!-- One slot of fixed height for what changes from game to game, so the shelf above never moves. -->
@@ -107,7 +124,8 @@
   .name, .meta, .status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   p { margin: 4px 0; color: var(--muted); font-size: 17px; }
   .system { height: 22px; margin-bottom: 6px; }
-  .meta { max-width: 100%; height: 24px; }
+  .meta { max-width: 100%; height: 30px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .variant select { height: 28px; font-size: 14px; }
   .slot { height: 68px; width: 100%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
   .slot p { margin: 2px 0; }
   .slot :global(.badges) { margin: 0; }
