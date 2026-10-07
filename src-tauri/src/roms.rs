@@ -77,7 +77,7 @@ pub fn rom_status(id: String, console: String) -> Result<RomStatus, String> {
             let p = Path::new(install.config_dir.as_deref().unwrap_or_default()).join(file);
             (p.exists(), p.exists().then(|| p.to_string_lossy().into()))
         }
-        Some(RomSpec::ConfigKey { file, key }) => {
+        Some(RomSpec::ConfigKey { file, key, .. }) => {
             let value = config_file(install, file)
                 .and_then(|p| fs::read_to_string(p).ok())
                 .and_then(|t| serde_json::from_str::<Value>(&t).ok())
@@ -130,8 +130,12 @@ pub fn select_rom(id: String, path: String) -> Result<(), String> {
             fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             fs::write(Path::new(&dir).join(file), data).map_err(|e| e.to_string())
         }
-        RomSpec::ConfigKey { file, key } => {
+        RomSpec::ConfigKey { file, key, folder } => {
             let dir = install.config_dir.ok_or("no config directory for this port")?;
+            let path = match Path::new(&path) {
+                p if folder && p.is_file() => p.parent().ok_or("invalid file")?.to_string_lossy().into_owned(),
+                _ => path,
+            };
             let target = Path::new(&dir).join(format!("{file}.json"));
             if !target.exists() {
                 fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

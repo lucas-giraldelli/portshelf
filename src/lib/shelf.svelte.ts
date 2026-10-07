@@ -15,7 +15,7 @@ import { cancelLeave, leaveForGame } from "$lib/fullscreen";
 export type InstallProgress = { stage: string; done: number; total: number | null };
 export type RomSummary = { ready: number; installed: number; assigned: number };
 
-const MEDIA = ["n64-cartridge", "snes-cartridge", "gba-cartridge", "md-cartridge", "nes-cartridge", "gb-cartridge", "arcade-cartridge", "gc-disc", "ps1-disc", "ps2-disc", "x360-disc", "wii-disc"];
+const MEDIA = ["n64-cartridge", "snes-cartridge", "gba-cartridge", "md-cartridge", "nes-cartridge", "gb-cartridge", "arcade-cartridge", "gc-disc", "ps1-disc", "ps2-disc", "x360-disc", "wii-disc", "ps4-disc"];
 /** Game file extensions of cartridge systems, for the file chooser. */
 const FILE_TYPES: Record<string, string[]> = {
   n64: ["z64", "n64", "v64"],
@@ -25,7 +25,9 @@ const FILE_TYPES: Record<string, string[]> = {
   nes: ["nes"],
   gb: ["gb", "gbc"],
 };
-const CONSOLES = ["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360", "nes", "gb", "wii", "arcade"];
+/** Disc image formats, for the file chooser of disc systems. */
+const DISC_TYPES = ["iso", "rvz", "gcm", "ciso", "wbfs", "nkit.iso", "cue", "chd"];
+const CONSOLES = ["n64", "gc", "snes", "gba", "ps1", "ps2", "md", "x360", "nes", "gb", "wii", "arcade", "ps4"];
 
 // Images are decoded before they are shown; otherwise WebKit decodes each one the first time
 // it comes into the carousel and the item flickers.
@@ -321,10 +323,15 @@ class Shelf {
   /** File chooser for one port's game file. */
   async selectRom(port: Port) {
     const disc = this.catalog?.consoles[port.console].media === "disc";
+    // A dumped PS4 game is a folder; its eboot.bin is picked and the folder is used.
+    const ps4 = port.console === "ps4";
+    const system = this.catalog?.consoles[port.console].name ?? "";
     const picked = await open({
-      title: tr("pick.gameFile", { system: this.catalog?.consoles[port.console].name ?? "", name: this.displayName(port) }),
+      title: tr(ps4 ? "pick.ps4Game" : "pick.gameFile", { system, name: this.displayName(port) }),
       defaultPath: this.roms[port.id]?.browse_dir,
-      filters: [{ name: tr("pick.gameFiles"), extensions: [...(disc ? ["iso", "rvz", "gcm", "ciso", "wbfs", "nkit.iso", "cue", "chd"] : (FILE_TYPES[port.console] ?? ["z64", "n64", "v64"])), "zip", "7z"] }],
+      filters: ps4
+        ? [{ name: "eboot.bin", extensions: ["bin"] }]
+        : [{ name: tr("pick.gameFiles"), extensions: [...(disc ? DISC_TYPES : (FILE_TYPES[port.console] ?? ["z64", "n64", "v64"])), "zip", "7z"] }],
     });
     if (typeof picked !== "string") return;
     try {

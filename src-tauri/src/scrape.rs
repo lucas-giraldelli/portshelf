@@ -23,6 +23,7 @@ fn repository(console: &str) -> Option<&'static str> {
         "gb" => "Nintendo_-_Game_Boy",
         "wii" => "Nintendo_-_Wii",
         "arcade" => "MAME",
+        "ps4" => "Sony_-_PlayStation_4",
         _ => return None,
     })
 }

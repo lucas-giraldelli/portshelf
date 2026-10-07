@@ -13,7 +13,8 @@
     "nes":  { "name": "NES",          "media": "cartridge", "color": "#b8403a", "year": 1985 },
     "gb":   { "name": "Game Boy",     "media": "cartridge", "color": "#8a9a3c", "year": 1989 },
     "wii":  { "name": "Wii",          "media": "disc",      "color": "#9fb4c7", "year": 2006 },
-    "arcade": { "name": "Arcade",     "media": "cartridge", "color": "#c8327a", "year": 1978 }
+    "arcade": { "name": "Arcade",     "media": "cartridge", "color": "#c8327a", "year": 1978 },
+    "ps4":  { "name": "PlayStation 4", "media": "disc",     "color": "#00439c", "year": 2013 }
   },
   "ports": [
     {"id": "dk64", "name": "Donkey Kong 64", "codes": ["NDOE"], "authors": "Rainchus, Ballaam, KillKlli, Green Bean and UmedMuzl", "title": "Donkey Kong 64", "console": "n64", "shell": "#f4c60f", "kind": "recomp", "repo": "https://github.com/Rainchus/Donkey-Kong-64-Recompiled", "config": {"format": "recompfrontend", "dir": "~/.config/DK64Recompiled"}, "game_arg": "dk64", "install": {"linux": {"asset": ["linux-x64-release", ".zip"], "exec": "DK64Recompiled"}, "windows": {"asset": ["windows-release", ".zip"], "exec": "*DK64Recompiled.exe"}, "recomp": {"program_id": "DK64Recompiled", "game_id": "DK64"}}, "rom": {"needs": "Donkey Kong 64 (USA)", "hashes": ["xxh3:4d876060f09b3fc5"]}},
@@ -132,6 +133,7 @@
     {"id": "mkwii", "platforms": ["linux"], "name": "Mario Kart Wii (WiiCompiled)", "title": "Mario Kart Wii", "console": "wii", "kind": "recomp", "repo": "https://github.com/patchzyy/wiicompiled", "install": {"linux": {"asset": ["setup-x86_64.appimage"]}}, "rom": {"needs": "Mario Kart Wii (Europe) (RMCP01), Wii disc image"}},
     {"id": "cannonball", "name": "OutRun (Cannonball)", "title": "Out Run", "console": "arcade", "kind": "decomp", "repo": "https://github.com/djyt/cannonball", "rom": {"needs": "OutRun (Revision B) arcade ROM set"}},
     {"id": "projectr", "name": "San Francisco Rush (ProjectR)", "title": "San Francisco Rush - The Rock", "console": "arcade", "kind": "decomp", "repo": "https://t3hd0gg.com/project-r/", "rom": {"needs": "San Francisco Rush: The Rock or Rush 2049 arcade files"}},
-    {"id": "3sx", "name": "Street Fighter III: 3rd Strike (3SX)", "title": "Street Fighter III - 3rd Strike", "console": "ps2", "kind": "decomp", "repo": "https://github.com/crowded-street/3sx", "install": {"linux": {"asset": ["linux-x86_64.tar.gz"]}, "windows": {"asset": ["windows.zip"]}}, "rom": {"needs": "Street Fighter III: 3rd Strike or Street Fighter Anniversary Collection, PlayStation 2 disc"}}
+    {"id": "3sx", "name": "Street Fighter III: 3rd Strike (3SX)", "title": "Street Fighter III - 3rd Strike", "console": "ps2", "kind": "decomp", "repo": "https://github.com/crowded-street/3sx", "install": {"linux": {"asset": ["linux-x86_64.tar.gz"]}, "windows": {"asset": ["windows.zip"]}}, "rom": {"needs": "Street Fighter III: 3rd Strike or Street Fighter Anniversary Collection, PlayStation 2 disc"}},
+    {"id": "bloodborne", "platforms": ["linux"], "name": "Bloodborne (bbport)", "codes": ["CUSA03173"], "authors": "deadinside28", "title": "Bloodborne", "console": "ps4", "kind": "native", "repo": "https://github.com/deadinside28/bloodborne_pc", "install": {"linux": {"asset": ["x86_64.appimage"]}, "args": ["--play"], "config_dir": "~/.config/bbport-launcher", "rom": {"kind": "config_key", "file": "settings", "key": "game_dir", "folder": true}}, "rom": {"needs": "Bloodborne (CUSA03173) with update 1.09 merged in, a dumped PS4 game folder"}}
   ]
 }

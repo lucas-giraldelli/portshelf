@@ -42,7 +42,14 @@ pub enum RomSpec {
     /// RecompFrontend ports: a big-endian copy named <game id>.z64 in the config directory.
     Stored { file: String },
     /// A path saved in one of the port's JSON settings files (Dusklight's backend.isoPath).
-    ConfigKey { file: String, key: String },
+    /// With `folder`, the folder holding the game file is saved instead (bbport's game_dir:
+    /// a dumped PS4 game, picked by its eboot.bin).
+    ConfigKey {
+        file: String,
+        key: String,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        folder: bool,
+    },
     /// Harbour Masters ports: they turn a ROM found next to the executable into an .o2r archive.
     Extracted { archive: String },
 }
@@ -131,7 +138,7 @@ fn detect_installed() -> BTreeMap<String, Install> {
             continue;
         }
         let rom = match *id {
-            "tp" => RomSpec::ConfigKey { file: "config".into(), key: "backend.isoPath".into() },
+            "tp" => RomSpec::ConfigKey { file: "config".into(), key: "backend.isoPath".into(), folder: false },
             "oot-soh" => RomSpec::Extracted { archive: "oot.o2r".into() },
             "mm-2s2h" => RomSpec::Extracted { archive: "mm.o2r".into() },
             // Recomps store the ROM as <game id>.z64.

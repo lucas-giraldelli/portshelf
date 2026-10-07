@@ -1,7 +1,7 @@
 //! Identifies game files in a folder and matches them to catalog ports: by the game code
 //! stored in the file itself when the format has one (N64 cartridge header, GameCube disc
-//! header, also inside RVZ / WIA images), otherwise by comparing the file name with the
-//! port's No-Intro / Redump title.
+//! header, also inside RVZ / WIA images, PS4 title ID in sce_sys/param.sfo), otherwise by
+//! comparing the file name with the port's No-Intro / Redump title.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -29,6 +29,10 @@ pub struct Found {
 
 fn console_of(path: &Path) -> Option<&'static str> {
     let name = path.file_name()?.to_str()?.to_lowercase();
+    // A PS4 game is a dumped folder; its executable stands for it.
+    if name == "eboot.bin" && is_ps4_game(path.parent()?) {
+        return Some("ps4");
+    }
     let ext = name.rsplit('.').next()?;
     Some(match ext {
         "z64" | "n64" | "v64" => "n64",
@@ -57,6 +61,34 @@ fn n64_header(path: &Path) -> Option<(String, String)> {
     }
     let text = |r: std::ops::Range<usize>| String::from_utf8_lossy(&b[r]).trim_matches(|c: char| c == '\0' || c.is_whitespace()).to_string();
     Some((text(0x20..0x34), text(0x3B..0x3F)))
+}
+
+/// A dumped PS4 game folder: eboot.bin next to sce_sys/param.sfo.
+fn is_ps4_game(dir: &Path) -> bool {
+    dir.join("eboot.bin").is_file() && dir.join("sce_sys/param.sfo").is_file()
+}
+
+/// A text value of a PS4 param.sfo (TITLE_ID, APP_VER, TITLE).
+fn sfo_value(game: &Path, wanted: &str) -> Option<String> {
+    let d = fs::read(game.join("sce_sys/param.sfo")).ok()?;
+    let u32_at = |o: usize| Some(u32::from_le_bytes(d.get(o..o + 4)?.try_into().ok()?) as usize);
+    let u16_at = |o: usize| Some(u16::from_le_bytes(d.get(o..o + 2)?.try_into().ok()?) as usize);
+    if d.get(..4)? != b"\0PSF" {
+        return None;
+    }
+    let (keys, data, count) = (u32_at(8)?, u32_at(12)?, u32_at(16)?);
+    for i in 0..count {
+        let entry = 20 + i * 16;
+        let key_start = keys + u16_at(entry)?;
+        let key_len = d.get(key_start..)?.iter().position(|&b| b == 0)?;
+        if d.get(key_start..key_start + key_len)? != wanted.as_bytes() {
+            continue;
+        }
+        let (len, offset) = (u32_at(entry + 4)?, u32_at(entry + 12)?);
+        let value = d.get(data + offset..data + offset + len)?;
+        return Some(String::from_utf8_lossy(value).trim_end_matches('\0').to_string());
+    }
+    None
 }
 
 /// N64 ROMs come in three byte orders; ports check the big-endian (.z64) one.
@@ -221,6 +253,8 @@ pub fn files_in(dir: &Path) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = fs::read_dir(dir)
         .map(|entries| entries.flatten().map(|e| e.path()).filter(|p| p.is_file() && console_of(p).is_some()).collect())
         .unwrap_or_default();
+    // PS4 games are folders: <game>/CUSA03173/eboot.bin.
+    out.extend(fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| is_ps4_game(p)).map(|p| p.join("eboot.bin")));
     out.sort();
     out
 }
@@ -240,7 +274,10 @@ fn normalize(title: &str) -> String {
 fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     for path in entries.flatten().map(|e| e.path()) {
-        if path.is_dir() {
+        if path.is_dir() && is_ps4_game(&path) {
+            // A PS4 game holds tens of thousands of files; its executable is enough.
+            out.push(path.join("eboot.bin"));
+        } else if path.is_dir() {
             if depth > 0 {
                 walk(&path, depth - 1, out);
             }
@@ -272,9 +309,20 @@ pub fn scan(dir: &Path, catalog: &Value) -> Vec<Found> {
                 Some(id) => (vec![id.clone(), id[..4].to_string()], id),
                 None => (vec![], String::new()),
             },
+            "ps4" => {
+                let game = file.parent().unwrap_or(Path::new(""));
+                match sfo_value(game, "TITLE_ID") {
+                    Some(id) => {
+                        let version = sfo_value(game, "APP_VER").unwrap_or_default();
+                        (vec![id.clone()], format!("{id} {version}").trim().to_string())
+                    }
+                    None => (vec![], String::new()),
+                }
+            }
             _ => (vec![], String::new()),
         };
-        let stem = file.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+        let named = if kind == "ps4" { file.parent().unwrap_or(&file) } else { &file };
+        let stem = named.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
         let file_name = normalize(stem.rsplit_once('.').map(|(s, _)| s).unwrap_or(&stem));
         for port in &ports {
             let console = port["console"].as_str().unwrap_or_default();
@@ -295,7 +343,8 @@ pub fn scan(dir: &Path, catalog: &Value) -> Vec<Found> {
                     && !internal_name.is_empty()
                     && !squash(&title).contains(&squash(&normalize(&internal_name)));
                 // Any extra words in the file name ("Splitscreen", "decompressed") may mean a hack.
-                let name_differs = squash(&file_name) != squash(&title);
+                // PS4 dumps are named by their title ID, not the game.
+                let name_differs = kind != "ps4" && squash(&file_name) != squash(&title);
                 let tagged = stem.contains('[') || stem.to_lowercase().contains("hack");
                 found.push(Found {
                     path: file.to_string_lossy().into_owned(),
@@ -353,5 +402,53 @@ mod tests {
         assert_eq!(console_of(Path::new("a/Donkey Kong 64 (USA).n64")), Some("n64"));
         assert_eq!(console_of(Path::new("TP.rvz")), Some("gc"));
         assert_eq!(console_of(Path::new("readme.txt")), None);
+    }
+
+    /// A param.sfo with the given text entries (keys, then values, 4-byte aligned).
+    fn sfo(entries: &[(&str, &str)]) -> Vec<u8> {
+        let (mut keys, mut data, mut table) = (Vec::new(), Vec::new(), Vec::new());
+        for (key, value) in entries {
+            let mut v = value.as_bytes().to_vec();
+            v.push(0);
+            let len = v.len() as u32;
+            v.resize(v.len().next_multiple_of(4), 0);
+            table.extend((keys.len() as u16).to_le_bytes());
+            table.extend(0x0204u16.to_le_bytes());
+            table.extend(len.to_le_bytes());
+            table.extend((v.len() as u32).to_le_bytes());
+            table.extend((data.len() as u32).to_le_bytes());
+            keys.extend(key.as_bytes());
+            keys.push(0);
+            data.extend(v);
+        }
+        keys.resize(keys.len().next_multiple_of(4), 0);
+        let key_start = 20 + table.len();
+        let mut out = b"\0PSF".to_vec();
+        out.extend(0x0101u32.to_le_bytes());
+        out.extend((key_start as u32).to_le_bytes());
+        out.extend(((key_start + keys.len()) as u32).to_le_bytes());
+        out.extend((entries.len() as u32).to_le_bytes());
+        out.extend(table);
+        out.extend(keys);
+        out.extend(data);
+        out
+    }
+
+    #[test]
+    fn ps4_games() {
+        let root = std::env::temp_dir().join("portshelf-ps4-test");
+        let game = root.join("bloodborne/CUSA03173");
+        fs::create_dir_all(game.join("sce_sys")).unwrap();
+        fs::write(game.join("eboot.bin"), b"").unwrap();
+        fs::write(game.join("sce_sys/param.sfo"), sfo(&[("APP_VER", "01.09"), ("TITLE_ID", "CUSA03173")])).unwrap();
+        assert_eq!(console_of(&game.join("eboot.bin")), Some("ps4"));
+        assert_eq!(console_of(Path::new("elsewhere/eboot.bin")), None);
+        assert_eq!(sfo_value(&game, "TITLE_ID").as_deref(), Some("CUSA03173"));
+        assert_eq!(files_in(&root.join("bloodborne")), vec![game.join("eboot.bin")]);
+        let catalog = serde_json::json!({ "ports": [{ "id": "bloodborne", "console": "ps4", "title": "Bloodborne", "codes": ["CUSA03173"] }] });
+        let found = scan(&root, &catalog);
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].by, found[0].detail.as_str(), found[0].modified), ("code", "CUSA03173 01.09", false));
+        let _ = fs::remove_dir_all(root);
     }
 }

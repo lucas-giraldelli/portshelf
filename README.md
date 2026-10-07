@@ -8,7 +8,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 ## Features
 
-- 109 ports across twelve systems, from Arcade and NES to Xbox 360 and Wii
+- 110 ports across thirteen systems, from Arcade and NES to Xbox 360, Wii and PlayStation 4
 - Browse systems, then games, with the keyboard, a controller or the mouse
 - Installs ports from their GitHub or GitLab releases; the list of ports updates itself, without a new PortShelf release
 - Opens each port on its own launcher, with the game file already in place, and in fullscreen when the shelf is
@@ -73,12 +73,12 @@ Cover art comes from [libretro-thumbnails](https://github.com/libretro-thumbnail
 
 ## Catalog
 
-`catalog/ports.json` lists the systems (name, release year, media type, accent colour) and the known ports. Each port has its system, kind (recompilation, decompilation, builder or remake), project page and No-Intro or Redump title, and can also carry:
+`catalog/ports.json` lists the systems (name, release year, media type, accent colour) and the known ports. Each port has its system, kind (recompilation, decompilation, builder, remake or native port: the original executable run on a runtime written for that game), project page and No-Intro or Redump title, and can also carry:
 
-- `install`: per operating system, the words that identify the release asset and the program to start, plus the settings folder and how the port expects its game file
+- `install`: per operating system, the words that identify the release asset and the program to start, plus the settings folder and how the port expects its game file (a PS4 game is a dumped folder: it is picked by its `eboot.bin` and matched by the title ID in `sce_sys/param.sfo`)
 - `recomp`: for N64: Recompiled ports, the `program_id` and `game_id` read from each project's source. The port keeps its settings in `~/.config/<program_id>` on Linux (`%LOCALAPPDATA%\<program_id>` on Windows) and looks for the ROM there as `<game_id>.z64`, so PortShelf places the checked ROM exactly where the port's own launcher finds it
 - `rom`: the release of the game the port needs, with the hashes of the accepted files (`xxh3:`, `sha1:`, `md5:` or `sha256:`)
-- `codes` (N64 game codes such as `NDOE`, GameCube IDs such as `GZ2E`), `authors`, `platforms` for ports made only for another operating system, and a cartridge colour
+- `codes` (N64 game codes such as `NDOE`, GameCube IDs such as `GZ2E`, PS4 title IDs such as `CUSA03173`), `authors`, `platforms` for ports made only for another operating system, and a cartridge colour
 
 `catalog/achievements/<port id>.json` holds a port's achievement set: memory conditions checked against the running game, with titles and descriptions in each language. [docs/achievements/](docs/achievements/) keeps the research notes behind each set.
 

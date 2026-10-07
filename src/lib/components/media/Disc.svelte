@@ -14,6 +14,7 @@
     ps2: { src: "/media/ps2-disc.png", diameter: 150, hole: 15 / 120 / 2 },
     x360: { src: "/media/x360-disc.png", diameter: 150, hole: 15 / 120 / 2 },
     wii: { src: "/media/wii-disc.png", diameter: 150, hole: 15 / 120 / 2 },
+    ps4: { src: "/media/ps4-disc.png", diameter: 150, hole: 15 / 120 / 2 },
   };
   let info = $derived(discs[consoleId] ?? { diameter: 150, hole: 15 / 120 / 2 });
 </script>
