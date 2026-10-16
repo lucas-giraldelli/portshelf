@@ -17,6 +17,8 @@
     gb: { src: "/media/gb-cartridge.png", aspect: 570 / 650, width: 120, window: [10.5, 22.7, 10.5, 13.4] },
     /* Arcade games: the flyer in a marquee frame. */
     arcade: { src: "/media/arcade-cartridge.png", aspect: 600 / 800, width: 125, window: [5.4, 4.0, 5.4, 15.2] },
+    /* Switch game card, drawn for PortShelf. */
+    switch: { src: "/media/switch-cartridge.png", aspect: 600 / 860, width: 105, window: [5.4, 15.3, 5.4, 3.8] },
   };
   let info = $derived(shells[consoleId] ?? shells.n64);
 </script>

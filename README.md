@@ -8,7 +8,7 @@ PortShelf is a launcher for native PC ports of console games: static recompilati
 
 ## Features
 
-- 110 ports across thirteen systems, from Arcade and NES to Xbox 360, Wii and PlayStation 4
+- 111 ports across fourteen systems, from Arcade and NES to Xbox 360, PlayStation 4 and Nintendo Switch
 - Browse systems, then games, with the keyboard, a controller or the mouse
 - Installs ports from their GitHub or GitLab releases; the list of ports updates itself, without a new PortShelf release
 - Opens each port on its own launcher, with the game file already in place, and in fullscreen when the shelf is
