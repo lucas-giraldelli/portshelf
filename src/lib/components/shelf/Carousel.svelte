@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
   // Horizontal carousel around a focused item. Keyboard and controller move it from the page;
   // here the mouse can drag it sideways, scroll it with the wheel, or click an item.
-  import type { Snippet } from "svelte";
+  import { untrack, type Snippet } from "svelte";
 
   let {
     items,
@@ -32,13 +32,47 @@
 
   const wrap = (i: number, n: number) => (n ? ((i % n) + n) % n : 0);
 
-  // Position of item i relative to the focused one.
+  // The index the carousel is drawn around. It follows `focused` frame by frame from script
+  // instead of with CSS transitions: WebKitGTK on the GPU paints the end state for one frame
+  // before a composited transition starts, which made the whole carousel flicker.
+  const SLIDE_MS = 280;
+  const easeOut = (t: number) => 1 - (1 - t) ** 3;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let pos = $state(untrack(() => focused));
+  let shownItems = untrack(() => items);
+
+  $effect(() => {
+    const target = focused;
+    const n = items.length;
+    return untrack(() => {
+      // A new list (another system or view) starts in place rather than sliding in.
+      if (items !== shownItems || reducedMotion.matches) {
+        shownItems = items;
+        pos = target;
+        return;
+      }
+      const from = pos;
+      // Looping carousels take the short way round.
+      const to = loop && n > 2 ? from + wrap(target - from + n / 2, n) - n / 2 : target;
+      const start = performance.now();
+      let raf = requestAnimationFrame(function step(now) {
+        const t = Math.min(1, (now - start) / SLIDE_MS);
+        pos = from + (to - from) * easeOut(t);
+        if (t < 1) raf = requestAnimationFrame(step);
+      });
+      return () => cancelAnimationFrame(raf);
+    });
+  });
+
+  // Position of item i relative to the drawn position. An item that wraps around to the
+  // other end jumps there while nearly transparent. The focused item lifts by 12px.
   function slot(i: number) {
-    let offset = i - focused;
+    let offset = i - pos;
     const n = items.length;
     if (loop && n > 2) offset = wrap(offset + Math.floor(n / 2), n) - Math.floor(n / 2);
     const distance = Math.abs(offset);
-    return `transform: translate(calc(-50% + ${offset * spacing}px), -50%) scale(${Math.max(0.55, 1 - distance * 0.18)}); opacity: ${Math.max(0, 1 - distance * 0.28)}; z-index: ${100 - distance};`;
+    const lift = Math.max(0, 1 - distance) * 12;
+    return `transform: translate(calc(-50% + ${offset * spacing}px), calc(-50% - ${lift}px)) scale(${Math.max(0.55, 1 - distance * 0.18)}); opacity: ${Math.max(0, 1 - distance * 0.28)}; z-index: ${100 - Math.round(distance)};`;
   }
 
   // A drag of about one item's width moves one step; a drag never counts as a click.
@@ -92,20 +126,15 @@
   section:active { cursor: grabbing; }
   .slot {
     position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%;
-    will-change: transform, opacity; /* own compositing layer: no repaint flicker while moving */
     background: none; border: 0; padding: 0;
-    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.28s ease;
   }
   .slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 8px; border-radius: 12px; }
 
-  /* Focused items lift smoothly (a transition, so leaving focus never snaps back), and discs
-     spin only while focused: pausing keeps their angle instead of jumping back to 0. */
-  .slot > :global(*) { transition: translate 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
-  .slot.focused > :global(*) { translate: 0 -12px; }
+  /* Discs spin only while focused: pausing keeps their angle instead of jumping back to 0. */
   .slot :global(.disc) { animation: spin 9s linear infinite paused; }
   .slot.focused :global(.disc) { animation-play-state: running; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
-    .slot, .slot > :global(*), .slot :global(.disc) { animation: none; transition: none; }
+    .slot :global(.disc) { animation: none; }
   }
 </style>
