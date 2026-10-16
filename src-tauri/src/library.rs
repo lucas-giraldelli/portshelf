@@ -104,7 +104,11 @@ pub fn load() -> Result<Library, String> {
 pub fn save(lib: &Library) -> Result<(), String> {
     fs::create_dir_all(app_dir()).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(lib).map_err(|e| e.to_string())?;
-    fs::write(library_path(), text).map_err(|e| e.to_string())
+    // Written aside and renamed, so a load running at the same time never reads a half-written file.
+    let path = library_path();
+    let partial = path.with_extension("json.part");
+    fs::write(&partial, text).map_err(|e| e.to_string())?;
+    fs::rename(&partial, &path).map_err(|e| e.to_string())
 }
 
 /// Loads the library, applies a change and saves it; returns what the change returns.
