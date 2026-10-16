@@ -38,14 +38,34 @@ fn set_cursor_visible(window: tauri::WebviewWindow, visible: bool) -> Result<(),
     window.set_cursor_visible(visible).map_err(|e| e.to_string())
 }
 
+/// Picks the WebKitGTK rendering path before GTK starts. Its DMA-BUF renderer is the only one
+/// that draws on the GPU, but on NVIDIA it fails twice: under X11 its GBM buffers fail and the
+/// window stays grey, and under Wayland it commits buffers without an explicit-sync acquire
+/// point, which strict compositors like Hyprland answer with Error 71. So on NVIDIA under
+/// Wayland run natively (the AppImage hook forces X11) with the driver's explicit sync off;
+/// everywhere else keep the fallback renderer, which paints on the CPU but works. Variables
+/// the user set are respected.
+#[cfg(target_os = "linux")]
+fn webview_env() {
+    let set_default = |var: &str, value: &str| {
+        if std::env::var_os(var).is_none() {
+            std::env::set_var(var, value);
+        }
+    };
+    let nvidia = std::path::Path::new("/proc/driver/nvidia/version").exists();
+    let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
+    if nvidia && wayland && std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("GDK_BACKEND", "wayland");
+        set_default("__NV_DISABLE_EXPLICIT_SYNC", "1");
+    } else {
+        set_default("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // WebKitGTK's DMA-BUF renderer hits a Wayland protocol error on NVIDIA; the
-    // fallback renderer works everywhere. Respect an explicit choice from the user.
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
+    webview_env();
     let builder = tauri::Builder::default();
     // Opening PortShelf again brings back the running one, even while it waits hidden for a
     // game. Development builds stay separate, so they can run next to the installed app.
